@@ -72,20 +72,23 @@ const MOTION: Record<Archetype, MotionProfile> = {
   // Medusa: slow, elegant, strong single pulses then a long coast.
   drifter: { pulseRate: 0.05, thrust: 0.26, drag: 0.95, turn: 0.012, wander: 0.5, buoyancy: -0.004, burst: 1.0 },
   // Larva: fast, twitchy, frequent little tail beats; turns sharply.
-  swarmer: { pulseRate: 0.14, thrust: 0.12, drag: 0.9, turn: 0.06, wander: 1.3, buoyancy: 0.0, burst: 0.85 },
+  swarmer: { pulseRate: 0.15, thrust: 0.13, drag: 0.88, turn: 0.07, wander: 1.5, buoyancy: 0.001, burst: 0.9 },
   // Sac: barely propels; mostly buoyant drifting with rare contractions.
-  floater: { pulseRate: 0.022, thrust: 0.12, drag: 0.965, turn: 0.01, wander: 0.35, buoyancy: -0.006, burst: 1.0 },
+  floater: { pulseRate: 0.019, thrust: 0.09, drag: 0.968, turn: 0.008, wander: 0.28, buoyancy: -0.007, burst: 1.0 },
   // Cephalopod: smooth, intentional finning with steady forward intent.
   hunter: { pulseRate: 0.075, thrust: 0.17, drag: 0.93, turn: 0.03, wander: 0.6, buoyancy: 0.0, burst: 0.4 },
+  // Colonial siphonophore: barely propels itself; drifts with very slow contractions.
+  colonial: { pulseRate: 0.013, thrust: 0.06, drag: 0.978, turn: 0.004, wander: 0.20, buoyancy: -0.005, burst: 1.0 },
 };
 
 /** Map a strategic Species to a soft-bodied biological body plan. */
 export function archetypeForSpecies(species: Species): Archetype {
   switch (species) {
     case "Drifter":
-    case "Synthesizer":
     case "Sentinel":
       return "drifter";
+    case "Synthesizer":
+      return "colonial"; // amorphous connector organism
     case "Lattice":
       return "floater";
     case "Catalyst":

@@ -18,7 +18,7 @@ export function FilterChip({ label, active, count, onClick }: FilterChipProps) {
       whileTap={{ scale: 0.95 }}
       transition={{ type: "spring", stiffness: 500, damping: 30 }}
       className={[
-        "focus-ring group flex items-center gap-2 rounded-full px-3.5 py-1.5",
+        "focus-ring group flex min-h-[36px] shrink-0 items-center gap-2 rounded-full px-3 py-1.5 md:px-3.5",
         "text-xs font-medium transition-colors duration-300",
         active
           ? "border border-teal/45 bg-teal/10 text-teal shadow-[0_0_20px_-8px_rgba(0,217,181,0.7)]"

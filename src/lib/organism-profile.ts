@@ -178,7 +178,7 @@ export function buildProfile(
     }
     case "hunter": {
       // Cephalopod: tapered mantle, undulating side fins, reaching arms.
-      aspect = range(rng, 1.3, 1.7);
+      aspect = range(rng, 1.35, 1.8);
       const arms = 5 + Math.floor(rng() * 3);
       for (let i = 0; i < arms; i++) {
         const spread = (i / (arms - 1) - 0.5) * 1.0;
@@ -194,8 +194,44 @@ export function buildProfile(
           kind: "arm",
         });
       }
-      finSpan = range(rng, 0.9, 1.25);
+      finSpan = range(rng, 0.95, 1.3);
       cilia = 0;
+      break;
+    }
+    case "colonial": {
+      // Siphonophore: near-round, ghostly amorphous, barely propulsive.
+      // Many omnidirectional filaments + very dense cilia all around.
+      aspect = range(rng, 0.88, 1.05);
+      const filamentCount = 7 + Math.floor(rng() * 6);
+      for (let i = 0; i < filamentCount; i++) {
+        const ang = rng() * Math.PI * 2;
+        tendrils.push({
+          base: ang,
+          length: range(rng, 0.85, 1.8),
+          width: range(rng, 0.025, 0.06),
+          phase: rng() * Math.PI * 2,
+          swayAmp: swayBase * range(rng, 0.35, 0.85),
+          swaySpeed: range(rng, 0.28, 0.65),
+          curl: (rng() - 0.5) * 2.0,
+          kind: "filament",
+        });
+      }
+      // A few longer drifting oral arms
+      const longArms = 2 + Math.floor(rng() * 2);
+      for (let i = 0; i < longArms; i++) {
+        const ang = rng() * Math.PI * 2;
+        tendrils.push({
+          base: ang,
+          length: range(rng, 1.9, 3.0) * (0.85 + momentum * 0.25),
+          width: range(rng, 0.07, 0.13),
+          phase: rng() * Math.PI * 2,
+          swayAmp: swayBase * range(rng, 0.65, 1.1),
+          swaySpeed: range(rng, 0.32, 0.6),
+          curl: (rng() - 0.5) * 1.1,
+          kind: "oralArm",
+        });
+      }
+      cilia = 22 + Math.floor(rng() * 12); // densest cilia of all archetypes
       break;
     }
     default: {
@@ -205,7 +241,12 @@ export function buildProfile(
   }
 
   // Internal glow pockets — complexity adds more layered organs.
-  const pocketCount = 1 + Math.round(complexity * 3) + (archetype === "floater" ? 1 : 0);
+  // Colonial organisms have many extra "zooid" pockets visible through their ghost-membrane.
+  const pocketCount =
+    1 +
+    Math.round(complexity * 3) +
+    (archetype === "floater" ? 1 : 0) +
+    (archetype === "colonial" ? 4 : 0);
   const pockets: Pocket[] = [];
   for (let i = 0; i < pocketCount; i++) {
     const ang = rng() * Math.PI * 2;

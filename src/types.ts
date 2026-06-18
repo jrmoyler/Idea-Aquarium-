@@ -22,12 +22,13 @@ export type Species =
  * strategic `Species` is mapped to one of these soft-bodied lifeforms so the
  * tank reads as a living ecosystem rather than a set of symbols:
  *
- * - `drifter`  — medusa / jellyfish: pulsing bell + trailing tendrils
- * - `swarmer`  — plankton / larva: small, twitchy, finned, curious
- * - `floater`  — fragile inflated sac with internal glow pockets
- * - `hunter`   — cephalopod: tapered mantle, undulating fins, reaching arms
+ * - `drifter`   — medusa / jellyfish: broad pulsing bell + trailing tendrils
+ * - `swarmer`   — plankton / larva: small, twitchy, elongated, finned
+ * - `floater`   — fragile highly-inflated translucent sac with glowing pockets
+ * - `hunter`    — cephalopod: tapered mantle, undulating fins, reaching arms
+ * - `colonial`  — siphonophore-like: large amorphous ghost with omnidirectional filaments
  */
-export type Archetype = "drifter" | "swarmer" | "floater" | "hunter";
+export type Archetype = "drifter" | "swarmer" | "floater" | "hunter" | "colonial";
 
 /** A single startup / MVP / creative concept living in the tank. */
 export interface Idea {

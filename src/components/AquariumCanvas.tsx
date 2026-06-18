@@ -110,13 +110,13 @@ export function AquariumCanvas({
     const sim = simRef.current;
 
     if (motesRef.current.length === 0) {
-      const count = 56;
+      const count = 90;
       motesRef.current = Array.from({ length: count }, (_, i) => ({
         x: Math.random() * width,
         y: Math.random() * height,
         z: Math.random(),
         drift: Math.random() * Math.PI * 2,
-        warm: i % 10 === 0,
+        warm: i % 9 === 0,
       }));
     }
 
@@ -384,11 +384,27 @@ function paintBackground(
     const cy = h * (0.35 + i * 0.32);
     const rad = Math.max(w, h) * 0.5;
     const sweep = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    sweep.addColorStop(0, rgba(PALETTE.teal, 0.016));
+    sweep.addColorStop(0, rgba(PALETTE.teal, 0.018));
     sweep.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = sweep;
     ctx.fillRect(0, 0, w, h);
   }
+
+  // Subtle depth stratification — faint horizontal haze bands at different
+  // depths simulate water layers with varying particulate density.
+  for (let i = 0; i < 3; i++) {
+    const depthFrac = 0.28 + i * 0.22;
+    const depthY = h * depthFrac;
+    const bandH = h * 0.10;
+    const hazeAlpha = 0.006 + Math.sin(now * 0.00012 + i * 2.3) * 0.0025;
+    const haze = ctx.createLinearGradient(0, depthY - bandH, 0, depthY + bandH);
+    haze.addColorStop(0, "rgba(0,0,0,0)");
+    haze.addColorStop(0.5, rgba(PALETTE.teal, hazeAlpha));
+    haze.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = haze;
+    ctx.fillRect(0, depthY - bandH, w, bandH * 2);
+  }
+
   ctx.restore();
 }
 
@@ -498,17 +514,26 @@ function roundRect(
 }
 
 function paintVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
+  // Radial vignette — darkens edges for a contained, cinematic feel.
   const v = ctx.createRadialGradient(
     w * 0.5,
-    h * 0.46,
-    Math.min(w, h) * 0.32,
+    h * 0.44,
+    Math.min(w, h) * 0.28,
     w * 0.5,
     h * 0.5,
-    Math.max(w, h) * 0.82,
+    Math.max(w, h) * 0.85,
   );
   v.addColorStop(0, "rgba(0,0,0,0)");
-  v.addColorStop(0.7, rgba("#02050D", 0.35));
-  v.addColorStop(1, rgba("#01030A", 0.85));
+  v.addColorStop(0.62, rgba("#02050D", 0.28));
+  v.addColorStop(0.85, rgba("#01030A", 0.60));
+  v.addColorStop(1, rgba("#010208", 0.92));
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, w, h);
+
+  // Additional top-edge darkening — the water surface sits above the frame.
+  const top = ctx.createLinearGradient(0, 0, 0, h * 0.12);
+  top.addColorStop(0, rgba("#010208", 0.55));
+  top.addColorStop(1, "rgba(0,0,0,0)");
+  ctx.fillStyle = top;
+  ctx.fillRect(0, 0, w, h * 0.12);
 }
