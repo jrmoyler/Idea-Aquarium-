@@ -1,44 +1,54 @@
-import type { Idea, Species, ViewMode } from "../types";
+import type { Archetype, Idea, Species, ViewMode } from "../types";
 import { ideaBaseColor } from "./color";
-import { clamp, distance, hashString, mulberry32 } from "./utils";
+import { buildProfile, type RenderProfile } from "./organism-profile";
+import { clamp, distance, hashString, lerpAngle, mulberry32 } from "./utils";
+import { fbm1D } from "./noise";
 
 /**
- * A live organism in the tank. Carries its source idea plus physics and
- * pre-computed visual parameters derived deterministically from traits, so the
- * ecosystem feels intentional rather than random.
+ * A live organism in the tank. Carries its source idea, soft-body physics, and
+ * a precomputed biological "anatomy" (RenderProfile). Motion is driven by
+ * muscular pulse propulsion + drag, not by following vector paths, so each
+ * creature feels like it swims through a fluid medium.
  */
 export interface Organism {
   idea: Idea;
+  archetype: Archetype;
+  profile: RenderProfile;
+
   x: number;
   y: number;
   vx: number;
   vy: number;
+  /** Facing direction; eases toward desired heading so turns lag (steering). */
+  heading: number;
 
   radius: number;
   baseColor: string;
 
-  /** Steering / behavior tuning derived from traits (all roughly 0..2). */
-  speedFactor: number; // momentum
-  mass: number; // complexity -> turn resistance & visual density
-  joyFactor: number; // wander expressiveness + glow
-  synergyFactor: number; // cohesion strength
+  // Behaviour tuning derived from traits.
+  speedFactor: number; // momentum -> top speed
+  mass: number; // complexity -> turn resistance + density
+  joyFactor: number; // expressiveness of pulse + appendage motion
+  synergyFactor: number; // social awareness / co-drifting
   depthBias: number; // dormant ideas settle lower
+  thrustPower: number; // muscular contraction strength
+  pulseRate: number; // contraction cadence (momentum)
+  drag: number; // fluid damping
+  buoyancy: number; // passive vertical drift
 
-  /** Per-species movement signature, so each archetype moves differently. */
-  motion: SpeciesMotion;
-
-  // Animation phases (deterministic seeds keep motion coherent).
+  // Animation phases.
   wanderAngle: number;
-  pulsePhase: number;
-  spinPhase: number;
-  swayPhase: number;
+  pulsePhase: number; // muscular contraction cycle
+  swayPhase: number; // appendage undulation
   seed: number;
 
-  /** Transient render state, eased every frame. */
+  // Eased render state.
+  contraction: number; // 0 relaxed .. 1 contracted (smoothed bell state)
   hover: number; // 0..1
   selectGlow: number; // 0..1
-  mergeGlow: number; // 0..1
-  presence: number; // 1 = full, < 1 when another organism holds focus
+  mergeGlow: number; // 0..1 (legacy birth flash + merge candidate)
+  resonance: number; // 0..1 shared bioluminescent attraction
+  presence: number; // 1 full, < 1 when another organism holds focus
 }
 
 export interface SimulationOptions {
@@ -47,42 +57,57 @@ export interface SimulationOptions {
   mode: ViewMode;
 }
 
-/** A movement personality applied per species. Amplitudes are intentionally
- * small to keep the tank calm and hypnotic rather than busy. */
-interface SpeciesMotion {
-  restless: number; // wander amplitude multiplier
-  agility: number; // steering responsiveness multiplier
-  speed: number; // max-speed multiplier
-  swayX: number; // lateral sway amplitude
-  swayY: number; // vertical sway amplitude
-  swaySpeed: number; // sway oscillation rate
+/** Per-archetype movement signature — how each body plan swims. */
+interface MotionProfile {
+  pulseRate: number; // base contraction cadence
+  thrust: number; // base impulse per contraction
+  drag: number; // velocity retention per frame
+  turn: number; // heading agility (0..1)
+  wander: number; // exploratory restlessness
+  buoyancy: number; // passive vertical drift (− rises, + sinks)
+  burst: number; // how "pulsed" vs continuous the propulsion is (0..1)
 }
 
-const SPECIES_MOTION: Record<Species, SpeciesMotion> = {
-  // Steady observers — barely drift, hold their station.
-  Sentinel: { restless: 0.45, agility: 0.7, speed: 0.62, swayX: 0.006, swayY: 0.004, swaySpeed: 0.006 },
-  // Directional gliders — smooth forward travel, little turning.
-  Conduit: { restless: 0.6, agility: 1.25, speed: 1.08, swayX: 0.01, swayY: 0.006, swaySpeed: 0.01 },
-  // Orbital weavers of structure — gentle circular drift.
-  Lattice: { restless: 0.7, agility: 0.85, speed: 0.82, swayX: 0.016, swayY: 0.016, swaySpeed: 0.012 },
-  // Slow lateral wanderers — the calmest, widest sway.
-  Drifter: { restless: 0.55, agility: 0.75, speed: 0.7, swayX: 0.024, swayY: 0.008, swaySpeed: 0.007 },
-  // Restless catalysts — small eager darts.
-  Catalyst: { restless: 1.2, agility: 1.35, speed: 1.18, swayX: 0.014, swayY: 0.012, swaySpeed: 0.02 },
-  // Sinuous weavers — a vertical, serpentine weave.
-  Weaver: { restless: 0.85, agility: 1.0, speed: 0.92, swayX: 0.012, swayY: 0.022, swaySpeed: 0.016 },
-  // Breathing synthesizers — pulse-led, moderate motion.
-  Synthesizer: { restless: 0.8, agility: 0.95, speed: 0.88, swayX: 0.014, swayY: 0.014, swaySpeed: 0.013 },
+const MOTION: Record<Archetype, MotionProfile> = {
+  // Medusa: slow, elegant, strong single pulses then a long coast.
+  drifter: { pulseRate: 0.05, thrust: 0.26, drag: 0.95, turn: 0.012, wander: 0.5, buoyancy: -0.004, burst: 1.0 },
+  // Larva: fast, twitchy, frequent little tail beats; turns sharply.
+  swarmer: { pulseRate: 0.14, thrust: 0.12, drag: 0.9, turn: 0.06, wander: 1.3, buoyancy: 0.0, burst: 0.85 },
+  // Sac: barely propels; mostly buoyant drifting with rare contractions.
+  floater: { pulseRate: 0.022, thrust: 0.12, drag: 0.965, turn: 0.01, wander: 0.35, buoyancy: -0.006, burst: 1.0 },
+  // Cephalopod: smooth, intentional finning with steady forward intent.
+  hunter: { pulseRate: 0.075, thrust: 0.17, drag: 0.93, turn: 0.03, wander: 0.6, buoyancy: 0.0, burst: 0.4 },
 };
 
+/** Map a strategic Species to a soft-bodied biological body plan. */
+export function archetypeForSpecies(species: Species): Archetype {
+  switch (species) {
+    case "Drifter":
+    case "Synthesizer":
+    case "Sentinel":
+      return "drifter";
+    case "Lattice":
+      return "floater";
+    case "Catalyst":
+      return "swarmer";
+    case "Conduit":
+    case "Weaver":
+      return "hunter";
+    default: {
+      const _never: never = species;
+      return _never;
+    }
+  }
+}
+
 const MODE_TEMPO: Record<ViewMode, number> = {
-  calm: 0.5,
+  calm: 0.55,
   active: 1.0,
 };
 
 /**
- * Lightweight steering ecosystem: wander + separation + cohesion toward
- * related ideas + soft boundary containment. No external physics deps.
+ * Soft-bodied ecosystem. Creatures wander, separate, co-drift with related
+ * ideas (synergy), and propel themselves with muscular pulses + fluid drag.
  */
 export class Simulation {
   organisms: Organism[] = [];
@@ -90,7 +115,6 @@ export class Simulation {
   height: number;
   mode: ViewMode;
 
-  /** id -> organism for fast adjacency lookups. */
   private byId = new Map<string, Organism>();
 
   constructor(ideas: Idea[], opts: SimulationOptions) {
@@ -105,7 +129,7 @@ export class Simulation {
     this.organisms = ideas.map((idea) => {
       const seed = hashString(idea.id);
       const local = mulberry32(seed);
-      const depthBias = idea.status === "dormant" ? 0.72 : 0.42;
+      const depthBias = idea.status === "dormant" ? 0.74 : 0.44;
       const startY =
         this.height * (depthBias - 0.12) + local() * this.height * 0.3;
       return this.createOrganism(idea, {
@@ -118,61 +142,62 @@ export class Simulation {
     for (const o of this.organisms) this.byId.set(o.idea.id, o);
   }
 
-  private createOrganism(
-    idea: Idea,
-    pos: { x: number; y: number },
-  ): Organism {
+  private createOrganism(idea: Idea, pos: { x: number; y: number }): Organism {
     const seed = hashString(idea.id);
     const local = mulberry32(seed);
     const revenue = idea.revenue / 100;
-    const radius = 16 + revenue * 18 + (idea.complexity / 100) * 8;
-    const depthBias = idea.status === "dormant" ? 0.72 : 0.42;
+    const radius = 17 + revenue * 17 + (idea.complexity / 100) * 7;
+    const depthBias = idea.status === "dormant" ? 0.74 : 0.44;
+    const archetype = archetypeForSpecies(idea.species);
+    const m = MOTION[archetype];
 
     return {
       idea,
+      archetype,
+      profile: buildProfile(idea, archetype, seed),
       x: pos.x,
       y: pos.y,
-      vx: (local() - 0.5) * 0.6,
-      vy: (local() - 0.5) * 0.6,
+      vx: (local() - 0.5) * 0.4,
+      vy: (local() - 0.5) * 0.4,
+      heading: local() * Math.PI * 2,
       radius,
       baseColor: ideaBaseColor(idea.revenue),
-      speedFactor: 0.45 + (idea.momentum / 100) * 1.25,
+      speedFactor: 0.45 + (idea.momentum / 100) * 1.2,
       mass: 0.6 + (idea.complexity / 100) * 1.4,
       joyFactor: 0.4 + (idea.joy / 100) * 1.6,
       synergyFactor: idea.synergy / 100,
       depthBias,
-      motion: SPECIES_MOTION[idea.species],
+      thrustPower: m.thrust * (0.7 + (idea.momentum / 100) * 0.6),
+      pulseRate: m.pulseRate * (0.7 + (idea.momentum / 100) * 0.7),
+      drag: m.drag,
+      buoyancy: m.buoyancy,
       wanderAngle: local() * Math.PI * 2,
       pulsePhase: local() * Math.PI * 2,
-      spinPhase: local() * Math.PI * 2,
       swayPhase: local() * Math.PI * 2,
       seed,
+      contraction: 0,
       hover: 0,
       selectGlow: 0,
       mergeGlow: 0,
+      resonance: 0,
       presence: 1,
     };
   }
 
-  /**
-   * Reconcile organisms with a (possibly updated) idea list: refresh idea
-   * references in place and birth organisms for any newly spawned ideas.
-   */
   reconcile(ideas: Idea[]) {
     for (const idea of ideas) {
       const existing = this.byId.get(idea.id);
       if (existing) {
         existing.idea = idea;
-        existing.depthBias = idea.status === "dormant" ? 0.72 : 0.42;
+        existing.archetype = archetypeForSpecies(idea.species);
+        existing.depthBias = idea.status === "dormant" ? 0.74 : 0.44;
         existing.baseColor = ideaBaseColor(idea.revenue);
       } else {
-        // New idea spawns near center with a small outward nudge.
         const o = this.createOrganism(idea, {
           x: this.width * 0.5 + (Math.random() - 0.5) * 80,
-          y: this.height * 0.42 + (Math.random() - 0.5) * 80,
+          y: this.height * 0.44 + (Math.random() - 0.5) * 80,
         });
-        o.selectGlow = 0;
-        o.mergeGlow = 1; // brief birth flash
+        o.mergeGlow = 1; // brief birth flush
         this.organisms.push(o);
         this.byId.set(o.idea.id, o);
       }
@@ -184,7 +209,6 @@ export class Simulation {
     const sy = height / this.height;
     this.width = width;
     this.height = height;
-    // Keep organisms proportionally placed on resize.
     for (const o of this.organisms) {
       o.x = clamp(o.x * sx, 40, width - 40);
       o.y = clamp(o.y * sy, 40, height - 40);
@@ -200,101 +224,131 @@ export class Simulation {
   }
 
   /**
-   * Advance the simulation by dt (in ~frames, normalized to 60fps).
-   * draggedId is excluded from steering so the user fully controls it.
+   * Advance the simulation. `draggedId` is excluded from steering (user-driven).
+   * `mergeCandidateId` is pulled gently toward the dragged organism and syncs
+   * its pulse — a behavioural attraction, never a drawn connector.
    */
-  step(dt: number, selectedId: string | null, draggedId: string | null) {
+  step(
+    dt: number,
+    selectedId: string | null,
+    draggedId: string | null,
+    mergeCandidateId: string | null,
+  ) {
     const tempo = MODE_TEMPO[this.mode];
     const orgs = this.organisms;
+    const dragged = draggedId ? this.byId.get(draggedId) : null;
 
     for (const o of orgs) {
-      const m = o.motion;
-      o.wanderAngle += (Math.sin(o.seed + o.pulsePhase) * 0.04 + 0.015) * dt;
-      o.pulsePhase += 0.018 * dt;
-      o.spinPhase += (0.003 + o.joyFactor * 0.003) * dt;
-      o.swayPhase += m.swaySpeed * tempo * dt;
+      const m = MOTION[o.archetype];
+      const dormant = o.idea.status === "dormant";
+      const slow = dormant ? 0.55 : 1;
 
-      if (o.idea.id === draggedId) continue;
+      // --- Muscular cycle: drives propulsion AND the visible bell contraction.
+      o.pulsePhase += o.pulseRate * tempo * slow * dt;
+      o.swayPhase += (0.02 + o.joyFactor * 0.02) * tempo * dt;
+      o.wanderAngle +=
+        (fbm1D(o.seed * 0.01 + o.pulsePhase * 0.3, 2) * 0.06 + 0.01) *
+        m.wander *
+        dt;
 
-      let ax = 0;
-      let ay = 0;
+      // Smoothed contraction state for the renderer (0 relaxed .. 1 squeezed).
+      const targetContract = clamp(Math.sin(o.pulsePhase) * 0.5 + 0.5, 0, 1);
+      o.contraction += (targetContract - o.contraction) * 0.3;
 
-      // --- Wander: expressive ideas (high joy) roam more freely; each species
-      // has its own restlessness so archetypes feel distinct.
-      const wanderStrength = 0.04 * o.joyFactor * m.restless * tempo;
-      ax += Math.cos(o.wanderAngle) * wanderStrength;
-      ay += Math.sin(o.wanderAngle * 0.9) * wanderStrength;
+      if (o.idea.id === draggedId) {
+        // Dragged creatures are positioned by the pointer; still pulse visually.
+        continue;
+      }
 
-      // --- Species sway: a signature oscillation (lateral / vertical / orbital).
-      ax += Math.cos(o.swayPhase) * m.swayX * tempo;
-      ay += Math.sin(o.swayPhase * 1.3 + o.seed) * m.swayY * tempo;
+      // --- Desired swim direction (steering), assembled as a soft vector.
+      let dx = Math.cos(o.wanderAngle);
+      let dy = Math.sin(o.wanderAngle * 0.85) * 0.7;
 
-      // --- Separation: gently avoid crowding everyone.
+      // Separation: avoid crowding (immediate, applied to velocity too).
+      let sepx = 0;
+      let sepy = 0;
       for (const other of orgs) {
         if (other === o) continue;
         const d = distance(o.x, o.y, other.x, other.y);
-        const minGap = o.radius + other.radius + 14;
-        if (d > 0 && d < minGap) {
-          const push = (minGap - d) / minGap;
-          ax += ((o.x - other.x) / d) * push * 0.5;
-          ay += ((o.y - other.y) / d) * push * 0.5;
+        const gap = o.radius + other.radius + 16;
+        if (d > 0 && d < gap) {
+          const push = (gap - d) / gap;
+          sepx += ((o.x - other.x) / d) * push;
+          sepy += ((o.y - other.y) / d) * push;
         }
       }
+      dx += sepx * 1.2;
+      dy += sepy * 1.2;
 
-      // --- Cohesion: high-synergy ideas drift toward related organisms.
+      // Cohesion / social awareness: high-synergy ideas co-drift with kin.
       if (o.synergyFactor > 0.05 && o.idea.adjacentNodes.length) {
         let cx = 0;
         let cy = 0;
         let n = 0;
         for (const id of o.idea.adjacentNodes) {
-          const target = this.byId.get(id);
-          if (!target) continue;
-          cx += target.x;
-          cy += target.y;
+          const t = this.byId.get(id);
+          if (!t) continue;
+          cx += t.x;
+          cy += t.y;
           n++;
         }
         if (n > 0) {
           cx /= n;
           cy /= n;
           const d = distance(o.x, o.y, cx, cy);
-          // Keep a comfortable schooling radius, don't collapse to a point.
           if (d > 120) {
-            ax += ((cx - o.x) / d) * 0.06 * o.synergyFactor * tempo;
-            ay += ((cy - o.y) / d) * 0.06 * o.synergyFactor * tempo;
+            dx += ((cx - o.x) / d) * 0.9 * o.synergyFactor;
+            dy += ((cy - o.y) / d) * 0.9 * o.synergyFactor;
           }
         }
       }
 
-      // --- Depth bias: dormant ideas sink and laze; active ideas float mid.
+      // Depth bias: dormant ideas settle low; active ideas float mid-tank.
       const targetY = this.height * o.depthBias;
-      ay += (targetY - o.y) * 0.00025 * tempo;
-      if (o.idea.status === "dormant") {
-        ax *= 0.6;
-        ay *= 0.6;
+      dy += clamp((targetY - o.y) * 0.004, -0.6, 0.6);
+
+      // Merge resonance: the candidate is gently drawn toward its suitor.
+      if (o.idea.id === mergeCandidateId && dragged) {
+        const d = distance(o.x, o.y, dragged.x, dragged.y) || 1;
+        dx += ((dragged.x - o.x) / d) * 1.6;
+        dy += ((dragged.y - o.y) / d) * 1.6;
+        // Sync the pulse so the pair breathes together.
+        o.pulsePhase = lerpAngle(o.pulsePhase, dragged.pulsePhase, 0.04);
       }
 
-      // --- Selected organism eases toward calm, centered hovering.
-      if (o.idea.id === selectedId) {
-        ax *= 0.5;
-        ay *= 0.5;
-      }
+      // --- Turn heading toward desired direction (steering lag / inertia).
+      const desired = Math.atan2(dy, dx);
+      let turn = m.turn * (1 / Math.sqrt(o.mass)) * tempo;
+      if (o.idea.id === selectedId) turn *= 0.6; // selected = calmer, composed
+      o.heading = lerpAngle(o.heading, desired, clamp(turn, 0, 0.4));
 
-      // Complexity adds inertia; species agility tunes how readily it steers.
-      const responsiveness = (1 / o.mass) * o.motion.agility;
-      o.vx += ax * responsiveness;
-      o.vy += ay * responsiveness;
+      // --- Propulsion: muscular contraction launches the body forward, then
+      // it coasts on drag. `burst` shapes pulse-like vs continuous swimming.
+      const contractVel = Math.max(0, Math.cos(o.pulsePhase)); // upstroke = thrust
+      const drive = (m.burst * contractVel + (1 - m.burst)) * o.thrustPower;
+      let thrust = drive * tempo * slow;
+      if (o.idea.id === selectedId) thrust *= 0.7;
+      o.vx += Math.cos(o.heading) * thrust;
+      o.vy += Math.sin(o.heading) * thrust;
 
-      // Speed envelope from momentum + tempo + species speed.
-      const maxSpeed = (0.32 + o.speedFactor * 0.5) * o.motion.speed * tempo;
+      // Immediate separation nudge so bodies never visibly overlap.
+      o.vx += sepx * 0.35 * tempo;
+      o.vy += sepy * 0.35 * tempo;
+
+      // Passive buoyancy (sacs and bells hang in the water column).
+      o.vy += o.buoyancy * tempo * slow;
+
+      // Fluid drag — heavier for lazy bodies, lighter for darters.
+      o.vx *= o.drag;
+      o.vy *= o.drag;
+
+      // Speed envelope from momentum + tempo.
+      const maxSpeed = (0.3 + o.speedFactor * 0.55) * tempo * slow;
       const sp = Math.hypot(o.vx, o.vy);
       if (sp > maxSpeed) {
         o.vx = (o.vx / sp) * maxSpeed;
         o.vy = (o.vy / sp) * maxSpeed;
       }
-
-      // Gentle damping for a liquid feel.
-      o.vx *= 0.985;
-      o.vy *= 0.985;
 
       o.x += o.vx * dt;
       o.y += o.vy * dt;
@@ -303,35 +357,28 @@ export class Simulation {
     }
   }
 
-  /** Soft-bounce containment with margins, no hard walls. */
+  /** Soft containment with margins — currents nudge creatures back, no walls. */
   private containSoft(o: Organism) {
-    const m = o.radius + 18;
-    if (o.x < m) {
-      o.vx += (m - o.x) * 0.01;
-    } else if (o.x > this.width - m) {
-      o.vx -= (o.x - (this.width - m)) * 0.01;
-    }
-    if (o.y < m) {
-      o.vy += (m - o.y) * 0.01;
-    } else if (o.y > this.height - m) {
-      o.vy -= (o.y - (this.height - m)) * 0.01;
-    }
+    const m = o.radius + 20;
+    if (o.x < m) o.vx += (m - o.x) * 0.008;
+    else if (o.x > this.width - m) o.vx -= (o.x - (this.width - m)) * 0.008;
+    if (o.y < m) o.vy += (m - o.y) * 0.008;
+    else if (o.y > this.height - m) o.vy -= (o.y - (this.height - m)) * 0.008;
     o.x = clamp(o.x, 8, this.width - 8);
     o.y = clamp(o.y, 8, this.height - 8);
   }
 
-  /** Return the topmost organism under a point, or null. */
+  /** Topmost organism under a point, or null. */
   hitTest(px: number, py: number): Organism | null {
     let found: Organism | null = null;
-    // iterate forward; later (drawn-on-top) wins ties.
     for (const o of this.organisms) {
-      const r = o.radius + 8;
+      const r = o.radius + 10;
       if (distance(px, py, o.x, o.y) <= r) found = o;
     }
     return found;
   }
 
-  /** Find the closest other organism to a given one within range. */
+  /** Closest other organism within range. */
   nearestTo(o: Organism, maxDist: number): Organism | null {
     let best: Organism | null = null;
     let bestD = maxDist;
