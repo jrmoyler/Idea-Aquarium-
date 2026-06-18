@@ -157,10 +157,12 @@ export default function App() {
         }}
       />
 
-      <main className="relative flex flex-1 gap-4 overflow-hidden p-4">
+      <main className="relative flex flex-1 gap-5 overflow-hidden p-5">
         {/* Aquarium viewport (hero) */}
-        <section className="relative flex-1 overflow-hidden rounded-2xl border border-slate-line/60 shadow-panel">
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-teal/30 to-transparent" />
+        <section className="relative flex-1 overflow-hidden rounded-2xl border border-slate-line/40 bg-navy-950 shadow-panel">
+          {/* Soft inner frame so the tank reads as a contained instrument. */}
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/[0.03]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-teal/25 to-transparent" />
           <AquariumCanvas
             ideas={ideas}
             selectedId={selectedId}
@@ -171,7 +173,7 @@ export default function App() {
             onHybrid={handleHybrid}
           />
           {/* Corner readout */}
-          <div className="pointer-events-none absolute bottom-4 left-5 z-10 flex items-center gap-3 text-[10px] uppercase tracking-widest2 text-slate-mute">
+          <div className="pointer-events-none absolute bottom-5 left-6 z-10 flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest2 text-slate-mute">
             <span className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-teal animate-pulse-soft" />
               Live Simulation

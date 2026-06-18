@@ -37,26 +37,16 @@ export default {
         widest2: "0.28em",
       },
       boxShadow: {
-        glow: "0 0 24px -4px rgba(0, 217, 181, 0.35)",
         panel: "0 24px 60px -30px rgba(0, 0, 0, 0.9)",
-      },
-      backgroundImage: {
-        "grid-faint":
-          "linear-gradient(rgba(143,160,191,0.05) 1px, transparent 1px), linear-gradient(90deg, rgba(143,160,191,0.05) 1px, transparent 1px)",
       },
       keyframes: {
         "pulse-soft": {
-          "0%, 100%": { opacity: "0.55" },
+          "0%, 100%": { opacity: "0.5" },
           "50%": { opacity: "1" },
-        },
-        "fade-up": {
-          "0%": { opacity: "0", transform: "translateY(8px)" },
-          "100%": { opacity: "1", transform: "translateY(0)" },
         },
       },
       animation: {
-        "pulse-soft": "pulse-soft 3.2s ease-in-out infinite",
-        "fade-up": "fade-up 0.5s ease forwards",
+        "pulse-soft": "pulse-soft 3.6s ease-in-out infinite",
       },
     },
   },
