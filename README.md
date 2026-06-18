@@ -36,15 +36,23 @@ npm run lint     # tsc --noEmit
 
 ## Experience
 
-- **Aquarium viewport (hero):** 16 idea organisms drift with steering-lite
-  behavior — wander, gentle separation, and synergy-driven cohesion that pulls
-  related ideas into loose schools. Dormant ideas sink and laze; high-momentum
-  ideas move faster; high-revenue ideas glow warmer (amber); high-novelty ideas
-  spawn orbiting particles.
-- **Hover** an organism to highlight it with a glow, rings, and a label.
-- **Click** to select it and open its dossier (cinematic focus state).
-- **Drag** one organism near another to surface a **hybrid candidate** — a
-  speculative crossbreed shown in the panel.
+- **Aquarium viewport (hero):** 16 idea organisms are rendered as soft-bodied,
+  bioluminescent deep-sea lifeforms (no geometric primitives). Each strategic
+  species maps to a biological body plan — **drifters** (pulsing jellyfish bells
+  with trailing tendrils), **swarmers** (twitchy finned larvae), **floaters**
+  (fragile glowing sacs), and **hunters** (tapered cephalopods with undulating
+  fins and reaching arms). They swim via muscular pulse propulsion + fluid drag,
+  wander, separate, and co-drift with related ideas (synergy). Dormant ideas
+  sink and dim; high-momentum ideas pulse more often; high-revenue ideas glow
+  warmer (internal amber); high-novelty ideas wear stranger silhouettes.
+- **Hover** an organism and it reacts like a living thing noticing attention —
+  tightening slightly and brightening from within, with a soft label.
+- **Click** to select it: a calmer, more luminous "specimen" state while the
+  rest of the ecosystem gently recedes. Its dossier opens on the right.
+- **Drag** one organism near another and the nearby compatible creature shows
+  a behavioral attraction and shared bioluminescent resonance (drifting toward
+  its suitor, pulses syncing — no connector line) before surfacing a **hybrid
+  candidate** in the panel.
 - **Intelligence panel:** a terminal-biotech dossier with trait bars, signals,
   the best adjacent node, mutation vectors, and CTAs (_Promote to Build Queue_,
   _Crossbreed Idea_). With nothing selected it shows a calm welcome state with
@@ -64,14 +72,17 @@ src/
   data/
     ideas.ts               16 seeded venture concepts
   lib/
-    simulation.ts          Steering ecosystem (positions, forces, hit-test)
+    simulation.ts          Soft-body ecosystem (pulse propulsion, drag, schooling)
+    organisms.ts           Biological canvas renderer (membranes, tendrils, glow)
+    organism-profile.ts    Deterministic creature "anatomy" grown from traits
+    noise.ts               Procedural value noise for organic deformation
     color.ts               Palette + color math (hex/rgb, mix, lighten)
-    utils.ts               Math, seeded RNG, filters, search
+    utils.ts               Math, seeded RNG, angle lerp, filters, search
     hybrid.ts              Crossbreed generator
     spawn.ts               New-idea generator for "Spawn New Idea"
   components/
     Header.tsx             Top control bar
-    AquariumCanvas.tsx     Canvas renderer + interaction + rAF loop
+    AquariumCanvas.tsx     Scene composition + interaction + rAF loop
     IdeaPanel.tsx          Right intelligence panel (welcome + dossier)
     MetricPill.tsx         Compact metric readout
     FilterChip.tsx         Toggleable filter chip
@@ -87,8 +98,9 @@ src/
 ## Extending
 
 - Add ideas in `src/data/ideas.ts` (they join the tank automatically).
-- Tune behavior in `src/lib/simulation.ts` (forces, tempo, schooling).
-- Adjust visuals in `AquariumCanvas.tsx` (`drawOrganism`) and the palette in
-  `src/lib/color.ts`.
+- Tune behavior in `src/lib/simulation.ts` (pulse cadence, thrust, drag, schooling).
+- Reshape creatures in `src/lib/organism-profile.ts` (anatomy from traits) and
+  `src/lib/organisms.ts` (membranes, tendrils, internal bioluminescence); the
+  palette lives in `src/lib/color.ts`.
 - A backend could later replace the seeded data and the `spawn` / `hybrid`
   generators without touching the simulation or UI.
