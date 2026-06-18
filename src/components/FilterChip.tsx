@@ -1,3 +1,5 @@
+import { motion } from "framer-motion";
+
 interface FilterChipProps {
   label: string;
   active: boolean;
@@ -5,38 +7,43 @@ interface FilterChipProps {
   onClick: () => void;
 }
 
-/** Toggleable filter chip with a quiet active state. */
+/** Toggleable filter chip. Distinct rest / hover / active states with a quiet
+ * teal active treatment. */
 export function FilterChip({ label, active, count, onClick }: FilterChipProps) {
   return (
-    <button
+    <motion.button
       type="button"
       onClick={onClick}
       aria-pressed={active}
+      whileTap={{ scale: 0.95 }}
+      transition={{ type: "spring", stiffness: 500, damping: 30 }}
       className={[
         "focus-ring group flex items-center gap-2 rounded-full px-3.5 py-1.5",
-        "text-xs font-medium transition-all duration-300",
+        "text-xs font-medium transition-colors duration-300",
         active
-          ? "border border-teal/40 bg-teal/10 text-teal shadow-[0_0_18px_-6px_rgba(0,217,181,0.6)]"
-          : "border border-slate-line/70 bg-navy-800/40 text-slate-ink hover:border-slate-ink/40 hover:text-slate-100",
+          ? "border border-teal/45 bg-teal/10 text-teal shadow-[0_0_20px_-8px_rgba(0,217,181,0.7)]"
+          : "border border-slate-line/60 bg-navy-800/30 text-slate-mute hover:border-slate-ink/40 hover:bg-navy-800/60 hover:text-slate-200",
       ].join(" ")}
     >
       <span
         className={[
-          "h-1.5 w-1.5 rounded-full transition-colors duration-300",
-          active ? "bg-teal animate-pulse-soft" : "bg-slate-mute",
+          "h-1.5 w-1.5 rounded-full transition-all duration-300",
+          active
+            ? "bg-teal shadow-[0_0_8px_0_rgba(0,217,181,0.9)] animate-pulse-soft"
+            : "bg-slate-mute/70 group-hover:bg-slate-ink",
         ].join(" ")}
       />
       {label}
       {typeof count === "number" && (
         <span
           className={[
-            "tabular-nums text-[10px]",
-            active ? "text-teal/70" : "text-slate-mute",
+            "tabular-nums text-[10px] transition-colors duration-300",
+            active ? "text-teal/70" : "text-slate-mute/70",
           ].join(" ")}
         >
           {count}
         </span>
       )}
-    </button>
+    </motion.button>
   );
 }

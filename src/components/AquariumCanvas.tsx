@@ -14,15 +14,16 @@ interface AquariumCanvasProps {
   onHybrid: (a: Idea, b: Idea) => void;
 }
 
-const MERGE_RANGE = 70;
+const MERGE_RANGE = 84;
 const DRAG_THRESHOLD = 5;
-const TRAIL_LEN = 16;
+const TRAIL_LEN = 22;
 
 interface AmbientParticle {
   x: number;
   y: number;
   z: number; // depth 0..1 -> size & speed
   drift: number;
+  warm: boolean;
 }
 
 export function AquariumCanvas({
@@ -112,14 +113,15 @@ export function AquariumCanvas({
     }
     const sim = simRef.current;
 
-    // Seed ambient dust.
+    // Seed ambient dust — suspended motes, mostly cool with rare warm flecks.
     if (particlesRef.current.length === 0) {
-      const count = 70;
-      particlesRef.current = Array.from({ length: count }, () => ({
+      const count = 52;
+      particlesRef.current = Array.from({ length: count }, (_, i) => ({
         x: Math.random() * width,
         y: Math.random() * height,
         z: Math.random(),
         drift: Math.random() * Math.PI * 2,
+        warm: i % 9 === 0,
       }));
     }
 
@@ -297,25 +299,39 @@ function draw(
   paintParticles(ctx, particles, width, height, s.dt);
   paintSynergyLinks(ctx, sim, s);
 
-  // Ease transient render states toward targets.
+  const anySelected = s.selectedId !== null;
+
+  // Ease transient render states toward targets. Easing rates are deliberately
+  // slow so selection and focus feel composed rather than snappy.
   for (const o of sim.organisms) {
     const isHover = o.idea.id === s.hoverId;
     const isSelected = o.idea.id === s.selectedId;
-    o.hover += ((isHover ? 1 : 0) - o.hover) * 0.18;
-    o.selectGlow += ((isSelected ? 1 : 0) - o.selectGlow) * 0.12;
-    if (o.mergeGlow > 0 && o !== s.mergeCandidate) {
+    o.hover += ((isHover ? 1 : 0) - o.hover) * 0.14;
+    o.selectGlow += ((isSelected ? 1 : 0) - o.selectGlow) * 0.09;
+
+    // Spotlight: when one organism holds focus, the rest gently recede.
+    const focused = isSelected || isHover || o.idea.id === s.draggedId;
+    const target = !anySelected || focused ? 1 : 0.32;
+    o.presence += (target - o.presence) * 0.07;
+
+    if (o === s.mergeCandidate) {
+      o.mergeGlow += (1 - o.mergeGlow) * 0.16;
+    } else if (o.mergeGlow > 0) {
       o.mergeGlow *= 0.9;
       if (o.mergeGlow < 0.01) o.mergeGlow = 0;
     }
-    if (o === s.mergeCandidate) {
-      o.mergeGlow += (1 - o.mergeGlow) * 0.2;
-    }
   }
 
-  // Draw non-selected first, selected last (on top, cinematic).
+  // Magical merge beam between the dragged organism and its candidate.
+  if (s.draggedId && s.mergeCandidate) {
+    const dragged = sim.getById(s.draggedId);
+    if (dragged) paintMergeBeam(ctx, dragged, s.mergeCandidate, now);
+  }
+
+  // Draw recessed organisms first, then hovered, then selected (on top).
   const ordered = [...sim.organisms].sort((a, b) => {
-    const av = a.idea.id === s.selectedId ? 1 : a.hover;
-    const bv = b.idea.id === s.selectedId ? 1 : b.hover;
+    const av = a.idea.id === s.selectedId ? 2 : a.hover;
+    const bv = b.idea.id === s.selectedId ? 2 : b.hover;
     return av - bv;
   });
 
@@ -334,54 +350,60 @@ function paintBackground(
   h: number,
   now: number,
 ) {
-  // Deep vertical gradient.
+  // Deep vertical field — navy dominates, darkening with depth.
   const base = ctx.createLinearGradient(0, 0, 0, h);
-  base.addColorStop(0, "#060C1E");
-  base.addColorStop(0.55, "#050A18");
-  base.addColorStop(1, "#03060F");
+  base.addColorStop(0, "#070D20");
+  base.addColorStop(0.5, "#050A18");
+  base.addColorStop(1, "#02050D");
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, w, h);
 
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
 
-  // Teal light from above, slowly breathing.
-  const breath = 0.5 + 0.5 * Math.sin(now * 0.0004);
+  // A single soft volume of light from above-center — the tank's "sun".
+  const breath = 0.5 + 0.5 * Math.sin(now * 0.00035);
   const topGlow = ctx.createRadialGradient(
     w * 0.5,
-    -h * 0.2,
+    -h * 0.32,
     0,
     w * 0.5,
-    -h * 0.2,
-    h * 1.1,
+    -h * 0.32,
+    h * 1.25,
   );
-  topGlow.addColorStop(0, rgba(PALETTE.teal, 0.1 + breath * 0.05));
+  topGlow.addColorStop(0, rgba(PALETTE.teal, 0.08 + breath * 0.035));
+  topGlow.addColorStop(0.5, rgba(PALETTE.teal, 0.02));
   topGlow.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = topGlow;
   ctx.fillRect(0, 0, w, h);
 
-  // Warm amber undercurrent near the floor.
+  // Warm amber undercurrent near the floor — strategic weight settling low.
   const floorGlow = ctx.createRadialGradient(
     w * 0.5,
-    h * 1.15,
+    h * 1.2,
     0,
     w * 0.5,
-    h * 1.15,
-    h * 0.9,
+    h * 1.2,
+    h * 0.95,
   );
-  floorGlow.addColorStop(0, rgba(PALETTE.amber, 0.06));
+  floorGlow.addColorStop(0, rgba(PALETTE.amber, 0.05));
   floorGlow.addColorStop(1, "rgba(0,0,0,0)");
   ctx.fillStyle = floorGlow;
   ctx.fillRect(0, 0, w, h);
   ctx.restore();
 
-  // Faint horizontal depth bands.
+  // Two slow caustic sweeps add depth without reading as "bands".
   ctx.save();
-  ctx.globalAlpha = 0.5;
-  for (let i = 1; i < 5; i++) {
-    const y = (h / 5) * i;
-    ctx.fillStyle = rgba("#8FA0BF", 0.015);
-    ctx.fillRect(0, y, w, 1);
+  ctx.globalCompositeOperation = "lighter";
+  for (let i = 0; i < 2; i++) {
+    const cx = w * (0.32 + i * 0.4) + Math.sin(now * 0.0002 + i * 2) * w * 0.08;
+    const cy = h * (0.35 + i * 0.32);
+    const rad = Math.max(w, h) * 0.5;
+    const sweep = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
+    sweep.addColorStop(0, rgba(PALETTE.teal, 0.018));
+    sweep.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = sweep;
+    ctx.fillRect(0, 0, w, h);
   }
   ctx.restore();
 }
@@ -396,17 +418,18 @@ function paintParticles(
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   for (const p of particles) {
-    p.drift += 0.01 * dt;
-    p.y -= (0.05 + p.z * 0.18) * dt;
-    p.x += Math.sin(p.drift) * 0.15 * dt;
+    p.drift += 0.006 * dt;
+    p.y -= (0.03 + p.z * 0.1) * dt;
+    p.x += Math.sin(p.drift) * 0.09 * dt;
     if (p.y < -4) {
       p.y = h + 4;
       p.x = Math.random() * w;
     }
     if (p.x < -4) p.x = w + 4;
     if (p.x > w + 4) p.x = -4;
-    const r = 0.4 + p.z * 1.6;
-    ctx.fillStyle = rgba(PALETTE.teal, 0.05 + p.z * 0.12);
+    const r = 0.35 + p.z * 1.3;
+    const color = p.warm ? PALETTE.amber : PALETTE.teal;
+    ctx.fillStyle = rgba(color, 0.04 + p.z * 0.09);
     ctx.beginPath();
     ctx.arc(p.x, p.y, r, 0, Math.PI * 2);
     ctx.fill();
@@ -427,8 +450,7 @@ function paintSynergyLinks(
     for (const id of o.idea.adjacentNodes) {
       const t = sim.getById(id);
       if (!t) continue;
-      // draw each pair once
-      if (o.idea.id > t.idea.id) continue;
+      if (o.idea.id > t.idea.id) continue; // draw each pair once
       const d = distance(o.x, o.y, t.x, t.y);
       if (d > 300) continue;
       const near =
@@ -436,8 +458,13 @@ function paintSynergyLinks(
         t.idea.id === s.selectedId ||
         o.idea.id === s.hoverId ||
         t.idea.id === s.hoverId;
-      const strength = (1 - d / 300) * (near ? 0.5 : 0.16);
-      ctx.strokeStyle = rgba(PALETTE.teal, strength * o.synergyFactor);
+      // Quieter at rest; the related web lights up around focus.
+      const strength = (1 - d / 300) * (near ? 0.55 : 0.1);
+      const fade = Math.min(o.presence, t.presence);
+      const grad = ctx.createLinearGradient(o.x, o.y, t.x, t.y);
+      grad.addColorStop(0, rgba(o.baseColor, strength * o.synergyFactor * fade));
+      grad.addColorStop(1, rgba(t.baseColor, strength * t.synergyFactor * fade));
+      ctx.strokeStyle = grad;
       ctx.beginPath();
       ctx.moveTo(o.x, o.y);
       ctx.lineTo(t.x, t.y);
@@ -455,28 +482,29 @@ function drawOrganism(
   trails: Map<string, number[]>,
 ) {
   const idea = o.idea;
-  const baseAlpha = dimmed ? 0.16 : 1;
+  const baseAlpha = (dimmed ? 0.14 : 1) * o.presence;
   const pulse = 1 + Math.sin(o.pulsePhase) * 0.04 * o.joyFactor;
   const r = o.radius * pulse;
   const focus = o.selectGlow;
   const hover = o.hover;
   const merge = o.mergeGlow;
 
-  // ---- Trail ----
+  // ---- Trail: a soft, tapering wake ----
   const trail = trails.get(idea.id) ?? [];
   trail.push(o.x, o.y);
   while (trail.length > TRAIL_LEN * 2) trail.splice(0, 2);
   trails.set(idea.id, trail);
 
-  if (!dimmed && o.idea.status !== "dormant") {
+  if (!dimmed && o.idea.status !== "dormant" && baseAlpha > 0.05) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    for (let i = 0; i < trail.length - 2; i += 2) {
-      const t = i / trail.length;
-      const tr = r * 0.18 * t;
-      ctx.fillStyle = rgba(o.baseColor, 0.05 * t * baseAlpha);
+    const pts = trail.length / 2;
+    for (let i = 0; i < pts - 1; i++) {
+      const t = i / pts;
+      const tr = r * 0.16 * t;
+      ctx.fillStyle = rgba(o.baseColor, 0.035 * t * t * baseAlpha);
       ctx.beginPath();
-      ctx.arc(trail[i], trail[i + 1], Math.max(tr, 0.5), 0, Math.PI * 2);
+      ctx.arc(trail[i * 2], trail[i * 2 + 1], Math.max(tr, 0.4), 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -506,21 +534,24 @@ function drawOrganism(
   ctx.fill();
   ctx.restore();
 
-  // ---- Orbiting rings (complexity = denser, slower) ----
+  // ---- Orbiting rings: complexity = more rings; quiet until focus ----
   const ringCount = 1 + Math.round((idea.complexity / 100) * 2);
-  ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  for (let i = 0; i < ringCount; i++) {
-    const rr = r * (1.18 + i * 0.22);
-    const rot = o.spinPhase * (i % 2 === 0 ? 1 : -1) + i;
-    ctx.strokeStyle = rgba(o.baseColor, (0.16 + hover * 0.18 + focus * 0.2) * baseAlpha);
-    ctx.lineWidth = 1;
-    const arc = Math.PI * (0.9 + (i % 2) * 0.5);
-    ctx.beginPath();
-    ctx.arc(0, 0, rr, rot, rot + arc);
-    ctx.stroke();
+  const ringAlpha = (0.07 + hover * 0.16 + focus * 0.22) * baseAlpha;
+  if (ringAlpha > 0.01) {
+    ctx.save();
+    ctx.globalCompositeOperation = "lighter";
+    for (let i = 0; i < ringCount; i++) {
+      const rr = r * (1.22 + i * 0.24);
+      const rot = o.spinPhase * (i % 2 === 0 ? 1 : -1) + i;
+      ctx.strokeStyle = rgba(o.baseColor, ringAlpha);
+      ctx.lineWidth = 0.9;
+      const arc = Math.PI * (0.85 + (i % 2) * 0.45);
+      ctx.beginPath();
+      ctx.arc(0, 0, rr, rot, rot + arc);
+      ctx.stroke();
+    }
+    ctx.restore();
   }
-  ctx.restore();
 
   // ---- Soft body ----
   // Squash slightly along velocity for an organic glide.
@@ -573,19 +604,20 @@ function drawOrganism(
   ctx.fill();
   ctx.restore();
 
-  // ---- Novelty particles ----
-  if (idea.novelty > 70 && !dimmed) {
+  // ---- Novelty motes: a quiet orbit for the most original ideas ----
+  if (idea.novelty > 70 && !dimmed && baseAlpha > 0.1) {
     ctx.save();
     ctx.globalCompositeOperation = "lighter";
-    const pc = 3 + Math.round((idea.novelty - 70) / 12);
+    const pc = 2 + Math.round((idea.novelty - 70) / 16);
     for (let i = 0; i < pc; i++) {
-      const a = o.spinPhase * 1.6 + (i / pc) * Math.PI * 2;
-      const orbit = r * (1.45 + Math.sin(o.pulsePhase + i) * 0.12);
+      const a = o.spinPhase * 1.1 + (i / pc) * Math.PI * 2;
+      const orbit = r * (1.5 + Math.sin(o.pulsePhase + i) * 0.1);
       const px = Math.cos(a) * orbit;
       const py = Math.sin(a) * orbit;
-      ctx.fillStyle = rgba(PALETTE.tealGlow, 0.5 * baseAlpha);
+      const twinkle = 0.28 + 0.22 * (0.5 + 0.5 * Math.sin(o.pulsePhase * 1.7 + i));
+      ctx.fillStyle = rgba(PALETTE.tealGlow, twinkle * baseAlpha);
       ctx.beginPath();
-      ctx.arc(px, py, 1.3, 0, Math.PI * 2);
+      ctx.arc(px, py, 1.1, 0, Math.PI * 2);
       ctx.fill();
     }
     ctx.restore();
@@ -610,30 +642,98 @@ function drawFocusFrame(
   focus: number,
   now: number,
 ) {
-  const fr = r * 1.95 + 6;
+  const fr = r * 1.85 + 6;
+
+  // Steady thin guide ring.
+  ctx.save();
+  ctx.globalAlpha = focus * 0.5;
+  ctx.strokeStyle = rgba(PALETTE.teal, 0.55);
+  ctx.lineWidth = 1;
+  ctx.beginPath();
+  ctx.arc(0, 0, fr, 0, Math.PI * 2);
+  ctx.stroke();
+  ctx.restore();
+
+  // Slow rotating measurement ticks — the "lab instrument" read.
   ctx.save();
   ctx.globalAlpha = focus;
-  ctx.rotate(now * 0.0003);
-  ctx.strokeStyle = rgba(PALETTE.teal, 0.6);
-  ctx.lineWidth = 1.2;
-  const seg = Math.PI * 0.18;
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2;
+  ctx.rotate(now * 0.00022);
+  ctx.strokeStyle = rgba(PALETTE.tealGlow, 0.7);
+  ctx.lineWidth = 1.4;
+  const ticks = 4;
+  const seg = Math.PI * 0.06;
+  for (let i = 0; i < ticks; i++) {
+    const a = (i / ticks) * Math.PI * 2;
     ctx.beginPath();
     ctx.arc(0, 0, fr, a - seg, a + seg);
     ctx.stroke();
   }
   ctx.restore();
 
-  // Pulsing thin ring.
+  // A single expanding sonar pulse, eased so it feels deliberate.
   ctx.save();
-  const p = 0.5 + 0.5 * Math.sin(now * 0.004);
-  ctx.globalAlpha = focus * (0.3 + p * 0.4);
-  ctx.strokeStyle = rgba(PALETTE.tealGlow, 0.7);
+  ctx.globalCompositeOperation = "lighter";
+  const cycle = (now * 0.0006) % 1;
+  const ease = 1 - Math.pow(1 - cycle, 2);
+  const pr = fr + ease * r * 1.4;
+  ctx.globalAlpha = focus * (1 - cycle) * 0.5;
+  ctx.strokeStyle = rgba(PALETTE.tealGlow, 0.8);
   ctx.lineWidth = 1;
   ctx.beginPath();
-  ctx.arc(0, 0, fr + 5 + p * 3, 0, Math.PI * 2);
+  ctx.arc(0, 0, pr, 0, Math.PI * 2);
   ctx.stroke();
+  ctx.restore();
+}
+
+/** A luminous connective beam shown while dragging an organism near another,
+ * with motes travelling along it — makes the merge feel intelligent. */
+function paintMergeBeam(
+  ctx: CanvasRenderingContext2D,
+  a: Organism,
+  b: Organism,
+  now: number,
+) {
+  const d = distance(a.x, a.y, b.x, b.y);
+  ctx.save();
+  ctx.globalCompositeOperation = "lighter";
+
+  // Core beam.
+  const grad = ctx.createLinearGradient(a.x, a.y, b.x, b.y);
+  grad.addColorStop(0, rgba(a.baseColor, 0.5));
+  grad.addColorStop(0.5, rgba(PALETTE.amberGlow, 0.55));
+  grad.addColorStop(1, rgba(PALETTE.amberGlow, 0.5));
+  ctx.strokeStyle = grad;
+  ctx.lineWidth = 1.4;
+  ctx.beginPath();
+  ctx.moveTo(a.x, a.y);
+  ctx.lineTo(b.x, b.y);
+  ctx.stroke();
+
+  // Travelling motes.
+  const motes = 4;
+  for (let i = 0; i < motes; i++) {
+    const t = ((now * 0.0009 + i / motes) % 1);
+    const mx = a.x + (b.x - a.x) * t;
+    const my = a.y + (b.y - a.y) * t;
+    ctx.fillStyle = rgba(PALETTE.amberGlow, 0.8 * (1 - Math.abs(t - 0.5) * 1.2));
+    ctx.beginPath();
+    ctx.arc(mx, my, 2, 0, Math.PI * 2);
+    ctx.fill();
+  }
+
+  // Forming halo at the midpoint when very close.
+  if (d < MERGE_RANGE * 0.8) {
+    const mx = (a.x + b.x) / 2;
+    const my = (a.y + b.y) / 2;
+    const pr = 10 + (0.5 + 0.5 * Math.sin(now * 0.006)) * 8;
+    const halo = ctx.createRadialGradient(mx, my, 0, mx, my, pr);
+    halo.addColorStop(0, rgba(PALETTE.amberGlow, 0.5));
+    halo.addColorStop(1, "rgba(0,0,0,0)");
+    ctx.fillStyle = halo;
+    ctx.beginPath();
+    ctx.arc(mx, my, pr, 0, Math.PI * 2);
+    ctx.fill();
+  }
   ctx.restore();
 }
 
@@ -644,29 +744,60 @@ function drawLabel(
   alpha: number,
 ) {
   ctx.save();
-  ctx.globalAlpha = clamp(alpha, 0, 1);
-  ctx.font =
-    "500 12px 'Space Grotesk', system-ui, sans-serif";
+  ctx.globalAlpha = clamp(alpha, 0, 1) * o.presence;
   ctx.textAlign = "center";
   ctx.textBaseline = "middle";
-  const label = o.idea.name;
-  const ty = o.y - r - 16;
 
-  const metrics = ctx.measureText(label);
-  const padX = 8;
-  const boxW = metrics.width + padX * 2;
-  const boxH = 20;
-  ctx.fillStyle = rgba("#03060F", 0.7);
-  roundRect(ctx, o.x - boxW / 2, ty - boxH / 2, boxW, boxH, 5);
+  const label = o.idea.name;
+  const species = o.idea.species.toUpperCase();
+  const ty = o.y - r - 22;
+
+  ctx.font = "500 12px 'Space Grotesk', system-ui, sans-serif";
+  const nameW = ctx.measureText(label).width;
+  ctx.font = "500 8px 'Space Grotesk', system-ui, sans-serif";
+  const specW = ctx.measureText(species).width * 1.18; // letter-spacing budget
+  const padX = 10;
+  const boxW = Math.max(nameW, specW) + padX * 2;
+  const boxH = 30;
+  const bx = o.x - boxW / 2;
+  const by = ty - boxH / 2;
+
+  ctx.fillStyle = rgba("#030712", 0.82);
+  roundRect(ctx, bx, by, boxW, boxH, 7);
   ctx.fill();
-  ctx.strokeStyle = rgba(PALETTE.teal, 0.25);
+  ctx.strokeStyle = rgba(PALETTE.teal, 0.22);
   ctx.lineWidth = 1;
-  roundRect(ctx, o.x - boxW / 2, ty - boxH / 2, boxW, boxH, 5);
+  roundRect(ctx, bx, by, boxW, boxH, 7);
   ctx.stroke();
 
-  ctx.fillStyle = "#D7E0F0";
-  ctx.fillText(label, o.x, ty + 0.5);
+  ctx.fillStyle = "#E6EDF8";
+  ctx.font = "500 12px 'Space Grotesk', system-ui, sans-serif";
+  ctx.fillText(label, o.x, ty - 4);
+
+  ctx.fillStyle = rgba(PALETTE.teal, 0.75);
+  ctx.font = "500 8px 'Space Grotesk', system-ui, sans-serif";
+  // Manual letter-spacing for the eyebrow.
+  drawSpacedText(ctx, species, o.x, ty + 8, 1.6);
   ctx.restore();
+}
+
+/** Draw centered text with manual letter spacing (canvas has no tracking). */
+function drawSpacedText(
+  ctx: CanvasRenderingContext2D,
+  text: string,
+  cx: number,
+  y: number,
+  spacing: number,
+) {
+  const widths = [...text].map((ch) => ctx.measureText(ch).width + spacing);
+  const total = widths.reduce((a, b) => a + b, 0) - spacing;
+  let x = cx - total / 2;
+  ctx.textAlign = "left";
+  for (let i = 0; i < text.length; i++) {
+    ctx.fillText(text[i], x, y);
+    x += widths[i];
+  }
+  ctx.textAlign = "center";
 }
 
 function roundRect(
@@ -693,14 +824,15 @@ function paintVignette(
 ) {
   const v = ctx.createRadialGradient(
     w * 0.5,
-    h * 0.5,
-    Math.min(w, h) * 0.35,
+    h * 0.46,
+    Math.min(w, h) * 0.32,
     w * 0.5,
     h * 0.5,
-    Math.max(w, h) * 0.75,
+    Math.max(w, h) * 0.82,
   );
   v.addColorStop(0, "rgba(0,0,0,0)");
-  v.addColorStop(1, "rgba(2,4,10,0.7)");
+  v.addColorStop(0.7, rgba("#02050D", 0.35));
+  v.addColorStop(1, rgba("#01030A", 0.85));
   ctx.fillStyle = v;
   ctx.fillRect(0, 0, w, h);
 }

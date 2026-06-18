@@ -1,4 +1,4 @@
-import type { Idea, ViewMode } from "../types";
+import type { Idea, Species, ViewMode } from "../types";
 import { ideaBaseColor } from "./color";
 import { clamp, distance, hashString, mulberry32 } from "./utils";
 
@@ -24,16 +24,21 @@ export interface Organism {
   synergyFactor: number; // cohesion strength
   depthBias: number; // dormant ideas settle lower
 
+  /** Per-species movement signature, so each archetype moves differently. */
+  motion: SpeciesMotion;
+
   // Animation phases (deterministic seeds keep motion coherent).
   wanderAngle: number;
   pulsePhase: number;
   spinPhase: number;
+  swayPhase: number;
   seed: number;
 
   /** Transient render state, eased every frame. */
   hover: number; // 0..1
   selectGlow: number; // 0..1
   mergeGlow: number; // 0..1
+  presence: number; // 1 = full, < 1 when another organism holds focus
 }
 
 export interface SimulationOptions {
@@ -42,9 +47,37 @@ export interface SimulationOptions {
   mode: ViewMode;
 }
 
+/** A movement personality applied per species. Amplitudes are intentionally
+ * small to keep the tank calm and hypnotic rather than busy. */
+interface SpeciesMotion {
+  restless: number; // wander amplitude multiplier
+  agility: number; // steering responsiveness multiplier
+  speed: number; // max-speed multiplier
+  swayX: number; // lateral sway amplitude
+  swayY: number; // vertical sway amplitude
+  swaySpeed: number; // sway oscillation rate
+}
+
+const SPECIES_MOTION: Record<Species, SpeciesMotion> = {
+  // Steady observers — barely drift, hold their station.
+  Sentinel: { restless: 0.45, agility: 0.7, speed: 0.62, swayX: 0.006, swayY: 0.004, swaySpeed: 0.006 },
+  // Directional gliders — smooth forward travel, little turning.
+  Conduit: { restless: 0.6, agility: 1.25, speed: 1.08, swayX: 0.01, swayY: 0.006, swaySpeed: 0.01 },
+  // Orbital weavers of structure — gentle circular drift.
+  Lattice: { restless: 0.7, agility: 0.85, speed: 0.82, swayX: 0.016, swayY: 0.016, swaySpeed: 0.012 },
+  // Slow lateral wanderers — the calmest, widest sway.
+  Drifter: { restless: 0.55, agility: 0.75, speed: 0.7, swayX: 0.024, swayY: 0.008, swaySpeed: 0.007 },
+  // Restless catalysts — small eager darts.
+  Catalyst: { restless: 1.2, agility: 1.35, speed: 1.18, swayX: 0.014, swayY: 0.012, swaySpeed: 0.02 },
+  // Sinuous weavers — a vertical, serpentine weave.
+  Weaver: { restless: 0.85, agility: 1.0, speed: 0.92, swayX: 0.012, swayY: 0.022, swaySpeed: 0.016 },
+  // Breathing synthesizers — pulse-led, moderate motion.
+  Synthesizer: { restless: 0.8, agility: 0.95, speed: 0.88, swayX: 0.014, swayY: 0.014, swaySpeed: 0.013 },
+};
+
 const MODE_TEMPO: Record<ViewMode, number> = {
-  calm: 0.62,
-  active: 1.15,
+  calm: 0.5,
+  active: 1.0,
 };
 
 /**
@@ -108,13 +141,16 @@ export class Simulation {
       joyFactor: 0.4 + (idea.joy / 100) * 1.6,
       synergyFactor: idea.synergy / 100,
       depthBias,
+      motion: SPECIES_MOTION[idea.species],
       wanderAngle: local() * Math.PI * 2,
       pulsePhase: local() * Math.PI * 2,
       spinPhase: local() * Math.PI * 2,
+      swayPhase: local() * Math.PI * 2,
       seed,
       hover: 0,
       selectGlow: 0,
       mergeGlow: 0,
+      presence: 1,
     };
   }
 
@@ -172,19 +208,26 @@ export class Simulation {
     const orgs = this.organisms;
 
     for (const o of orgs) {
-      o.wanderAngle += (Math.sin(o.seed + o.pulsePhase) * 0.05 + 0.02) * dt;
-      o.pulsePhase += 0.02 * dt;
-      o.spinPhase += (0.004 + o.joyFactor * 0.004) * dt;
+      const m = o.motion;
+      o.wanderAngle += (Math.sin(o.seed + o.pulsePhase) * 0.04 + 0.015) * dt;
+      o.pulsePhase += 0.018 * dt;
+      o.spinPhase += (0.003 + o.joyFactor * 0.003) * dt;
+      o.swayPhase += m.swaySpeed * tempo * dt;
 
       if (o.idea.id === draggedId) continue;
 
       let ax = 0;
       let ay = 0;
 
-      // --- Wander: expressive ideas (high joy) roam more freely.
-      const wanderStrength = 0.05 * o.joyFactor * tempo;
+      // --- Wander: expressive ideas (high joy) roam more freely; each species
+      // has its own restlessness so archetypes feel distinct.
+      const wanderStrength = 0.04 * o.joyFactor * m.restless * tempo;
       ax += Math.cos(o.wanderAngle) * wanderStrength;
       ay += Math.sin(o.wanderAngle * 0.9) * wanderStrength;
+
+      // --- Species sway: a signature oscillation (lateral / vertical / orbital).
+      ax += Math.cos(o.swayPhase) * m.swayX * tempo;
+      ay += Math.sin(o.swayPhase * 1.3 + o.seed) * m.swayY * tempo;
 
       // --- Separation: gently avoid crowding everyone.
       for (const other of orgs) {
@@ -236,13 +279,13 @@ export class Simulation {
         ay *= 0.5;
       }
 
-      // Complexity adds inertia: heavy ideas turn slowly.
-      const responsiveness = 1 / o.mass;
+      // Complexity adds inertia; species agility tunes how readily it steers.
+      const responsiveness = (1 / o.mass) * o.motion.agility;
       o.vx += ax * responsiveness;
       o.vy += ay * responsiveness;
 
-      // Speed envelope from momentum + tempo.
-      const maxSpeed = (0.35 + o.speedFactor * 0.55) * tempo;
+      // Speed envelope from momentum + tempo + species speed.
+      const maxSpeed = (0.32 + o.speedFactor * 0.5) * o.motion.speed * tempo;
       const sp = Math.hypot(o.vx, o.vy);
       if (sp > maxSpeed) {
         o.vx = (o.vx / sp) * maxSpeed;
