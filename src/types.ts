@@ -4,9 +4,9 @@
 export type IdeaStatus = "active" | "incubating" | "dormant" | "promoted";
 
 /**
- * Abstract "species" classifications. These drive subtle visual archetypes in
- * the simulation (body geometry, tail style, particle behavior) rather than
- * literal creatures.
+ * Strategic "species" classifications shown in the dossier. Each maps to a
+ * soft-bodied biological `Archetype` (see below) that determines how the
+ * organism is grown and animated in the tank.
  */
 export type Species =
   | "Synthesizer"
@@ -16,6 +16,18 @@ export type Species =
   | "Catalyst"
   | "Sentinel"
   | "Weaver";
+
+/**
+ * Biological body plan used by the simulation + canvas renderer. Each idea's
+ * strategic `Species` is mapped to one of these soft-bodied lifeforms so the
+ * tank reads as a living ecosystem rather than a set of symbols:
+ *
+ * - `drifter`  — medusa / jellyfish: pulsing bell + trailing tendrils
+ * - `swarmer`  — plankton / larva: small, twitchy, finned, curious
+ * - `floater`  — fragile inflated sac with internal glow pockets
+ * - `hunter`   — cephalopod: tapered mantle, undulating fins, reaching arms
+ */
+export type Archetype = "drifter" | "swarmer" | "floater" | "hunter";
 
 /** A single startup / MVP / creative concept living in the tank. */
 export interface Idea {
