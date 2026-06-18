@@ -157,11 +157,17 @@ export default function App() {
         }}
       />
 
-      <main className="relative flex flex-1 gap-5 overflow-hidden p-5">
-        {/* Aquarium viewport (hero) */}
-        <section className="relative flex-1 overflow-hidden rounded-2xl border border-slate-line/40 bg-navy-950 shadow-panel">
-          {/* Soft inner frame so the tank reads as a contained instrument. */}
-          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/[0.03]" />
+      {/*
+        Responsive layout:
+          Mobile (<md):  flex-col — aquarium fills top ~55% as visual hero,
+                         dossier panel stacks below as full-width card.
+          Desktop (≥md): flex-row — aquarium is dominant wide hero,
+                         dossier panel is a fixed-width right sidebar.
+      */}
+      <main className="relative flex flex-1 flex-col gap-3 overflow-hidden p-3 md:flex-row md:gap-5 md:p-5">
+        {/* Aquarium viewport — the visual hero at every breakpoint */}
+        <section className="relative h-[56vh] shrink-0 overflow-hidden rounded-xl border border-slate-line/40 bg-navy-950 shadow-panel md:h-auto md:flex-1 md:rounded-2xl">
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-xl ring-1 ring-inset ring-white/[0.03] md:rounded-2xl" />
           <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-teal/25 to-transparent" />
           <AquariumCanvas
             ideas={ideas}
@@ -173,17 +179,17 @@ export default function App() {
             onHybrid={handleHybrid}
           />
           {/* Corner readout */}
-          <div className="pointer-events-none absolute bottom-5 left-6 z-10 flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest2 text-slate-mute">
+          <div className="pointer-events-none absolute bottom-3 left-4 z-10 flex items-center gap-2.5 font-mono text-[9px] uppercase tracking-widest2 text-slate-mute md:bottom-5 md:left-6 md:gap-3 md:text-[10px]">
             <span className="flex items-center gap-1.5">
               <span className="h-1.5 w-1.5 rounded-full bg-teal animate-pulse-soft" />
-              Live Simulation
+              Live
             </span>
             <span className="text-slate-line">/</span>
-            <span className="capitalize">{mode} tempo</span>
+            <span className="capitalize">{mode}</span>
           </div>
         </section>
 
-        {/* Intelligence panel */}
+        {/* Intelligence panel — right sidebar on desktop, full-width section on mobile */}
         <IdeaPanel
           selected={selected}
           hybrid={hybrid}

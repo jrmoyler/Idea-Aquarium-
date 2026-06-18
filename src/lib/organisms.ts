@@ -76,6 +76,9 @@ export function drawOrganism(
     case "hunter":
       drawHunter(ctx, o, t, r, bodyColor, glowColor, baseAlpha, limbAlpha, glow, tighten);
       break;
+    case "colonial":
+      drawColonial(ctx, o, t, r, bodyColor, glowColor, baseAlpha, limbAlpha, glow, tighten);
+      break;
     default: {
       const _never: never = o.archetype;
       return _never;
@@ -490,23 +493,26 @@ function drawDrifter(
   glow: number,
   tighten: number,
 ) {
+  // Broad flat disc bell — moon-jellyfish style. Joy makes the bell wider and
+  // more expressive; high joy creatures have an almost pancake silhouette.
+  const bellWidth = 1.06 + o.joyFactor * 0.14;
   const shape: BodyShape = {
-    rBase: 1,
-    elong: 0.92,
-    squash: 1.04,
-    frontFull: 1.18,
-    backTaper: 0.86,
-    contractAmt: 0.55,
+    rBase: 1.0,
+    elong: 0.86 + o.profile.asym * 0.04,
+    squash: bellWidth,
+    frontFull: 1.22 + o.joyFactor * 0.08,
+    backTaper: 0.80 - o.joyFactor * 0.06,
+    contractAmt: 0.6,
   };
   // Trailing oral arms + tentacles first (behind the bell).
   for (const td of o.profile.tendrils) {
     paintTendril(ctx, o, td, t, r, bodyColor, glowColor, limbAlpha, false);
   }
   const pts = bodyPoints(o.profile, o, t, shape, tighten);
-  paintMembrane(ctx, pts, r, bodyColor, baseAlpha, { x: r * 0.25, y: -r * 0.3 });
+  paintMembrane(ctx, pts, r, bodyColor, baseAlpha, { x: r * 0.2, y: -r * 0.32 });
   paintInterior(ctx, o, pts, t, r, glowColor, baseAlpha, glow);
-  // Marginal cilia around the trailing rim of the bell.
-  paintCilia(ctx, o, pts, t, r, glowColor, limbAlpha, Math.PI * 0.4, Math.PI * 1.6);
+  // Marginal cilia along the full trailing rim.
+  paintCilia(ctx, o, pts, t, r, glowColor, limbAlpha, Math.PI * 0.35, Math.PI * 1.65);
 }
 
 function drawSwarmer(
@@ -521,21 +527,22 @@ function drawSwarmer(
   glow: number,
   tighten: number,
 ) {
+  // Larval — small, dart-like, highly elongated. These are the fast ones.
   const shape: BodyShape = {
-    rBase: 0.82,
-    elong: o.profile.aspect,
-    squash: 0.72,
-    frontFull: 1.12,
-    backTaper: 0.4,
-    contractAmt: 0.3,
+    rBase: 0.70,           // noticeably smaller than other archetypes
+    elong: o.profile.aspect * 1.05,
+    squash: 0.60,          // very squashed cross-section
+    frontFull: 1.14,
+    backTaper: 0.28,       // sharp needle tail
+    contractAmt: 0.38,
   };
   for (const td of o.profile.tendrils) {
     paintTendril(ctx, o, td, t, r, bodyColor, glowColor, limbAlpha, false);
   }
-  paintFins(ctx, o, t, r * 0.7, bodyColor, limbAlpha * 0.8);
+  paintFins(ctx, o, t, r * 0.68, bodyColor, limbAlpha * 0.85);
   const pts = bodyPoints(o.profile, o, t, shape, tighten);
-  paintMembrane(ctx, pts, r, bodyColor, baseAlpha, { x: r * 0.4, y: -r * 0.2 });
-  paintInterior(ctx, o, pts, t, r, glowColor, baseAlpha, glow * 1.1);
+  paintMembrane(ctx, pts, r, bodyColor, baseAlpha, { x: r * 0.42, y: -r * 0.18 });
+  paintInterior(ctx, o, pts, t, r, glowColor, baseAlpha, glow * 1.15);
 }
 
 function drawFloater(
@@ -550,22 +557,26 @@ function drawFloater(
   glow: number,
   tighten: number,
 ) {
+  // Highly inflated sac — maximum volume, very thin translucent wall.
+  // Complexity-driven density makes more complex ideas appear more "loaded."
+  const inflation = 1.06 + o.profile.density * 0.14;
   const shape: BodyShape = {
-    rBase: 1.02,
+    rBase: inflation,
     elong: 1.0,
-    squash: 0.96,
-    frontFull: 1.0,
-    backTaper: 0.96,
-    contractAmt: 0.4,
+    squash: 0.98,
+    frontFull: 1.03,
+    backTaper: 1.0,    // nearly spherical
+    contractAmt: 0.22, // barely contracts — fragile membrane
   };
   for (const td of o.profile.tendrils) {
-    paintTendril(ctx, o, td, t, r, bodyColor, glowColor, limbAlpha * 0.85, false);
+    paintTendril(ctx, o, td, t, r, bodyColor, glowColor, limbAlpha * 0.8, false);
   }
   const pts = bodyPoints(o.profile, o, t, shape, tighten);
-  paintMembrane(ctx, pts, r, bodyColor, baseAlpha * 0.92, { x: -r * 0.2, y: -r * 0.3 });
-  paintInterior(ctx, o, pts, t, r, glowColor, baseAlpha, glow);
-  // A full skirt of cilia all around the fragile sac.
-  paintCilia(ctx, o, pts, t, r, glowColor, limbAlpha * 0.8, 0, Math.PI * 2);
+  // Very translucent — the organs inside are the main visual interest.
+  paintMembrane(ctx, pts, r, bodyColor, baseAlpha * 0.78, { x: -r * 0.15, y: -r * 0.28 });
+  paintInterior(ctx, o, pts, t, r, glowColor, baseAlpha * 1.1, glow);
+  // Dense cilia all around the fragile membrane perimeter.
+  paintCilia(ctx, o, pts, t, r, glowColor, limbAlpha * 0.9, 0, Math.PI * 2);
 }
 
 function drawHunter(
@@ -580,13 +591,14 @@ function drawHunter(
   glow: number,
   tighten: number,
 ) {
+  // Cephalopod — most elongated of all archetypes, deliberate and directional.
   const shape: BodyShape = {
-    rBase: 0.92,
-    elong: o.profile.aspect,
-    squash: 0.7,
-    frontFull: 1.06,
-    backTaper: 0.36,
-    contractAmt: 0.22,
+    rBase: 0.93,
+    elong: o.profile.aspect * 1.08,  // extra elongation
+    squash: 0.64,                     // noticeably compressed cross-section
+    frontFull: 1.08,
+    backTaper: 0.28,                  // very sharp posterior
+    contractAmt: 0.20,
   };
   // Undulating side fins run the length of the mantle.
   paintFins(ctx, o, t, r, bodyColor, limbAlpha);
@@ -597,4 +609,40 @@ function drawHunter(
   for (const td of o.profile.tendrils) {
     paintTendril(ctx, o, td, t, r, bodyColor, glowColor, limbAlpha, true);
   }
+}
+
+function drawColonial(
+  ctx: CanvasRenderingContext2D,
+  o: Organism,
+  t: number,
+  r: number,
+  bodyColor: string,
+  glowColor: string,
+  baseAlpha: number,
+  limbAlpha: number,
+  glow: number,
+  tighten: number,
+) {
+  // Siphonophore / colonial tunicate — large, near-spherical, highly translucent.
+  // Internal "zooids" glow brightly through the ghost membrane; filaments emanate
+  // omnidirectionally and drift on slow lazy currents.
+  const shape: BodyShape = {
+    rBase: 1.12,           // larger than other archetypes
+    elong: o.profile.aspect,
+    squash: 0.99,
+    frontFull: 1.04,
+    backTaper: 1.0,        // round — no real front/back
+    contractAmt: 0.16,     // almost no muscular contraction
+  };
+  // All filaments radiate outward in every direction.
+  for (const td of o.profile.tendrils) {
+    paintTendril(ctx, o, td, t, r, bodyColor, glowColor, limbAlpha * 0.6, false);
+  }
+  const pts = bodyPoints(o.profile, o, t, shape, tighten);
+  // Ghostly membrane — almost entirely transparent; the interior is the animal.
+  paintMembrane(ctx, pts, r, bodyColor, baseAlpha * 0.68, { x: 0, y: -r * 0.18 });
+  // Vivid internal glow from zooid pockets, burning through the thin skin.
+  paintInterior(ctx, o, pts, t, r, glowColor, baseAlpha * 1.25, glow * 1.15);
+  // Very dense cilia covering the entire outer surface.
+  paintCilia(ctx, o, pts, t, r, glowColor, limbAlpha * 0.88, 0, Math.PI * 2);
 }

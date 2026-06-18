@@ -27,8 +27,6 @@ type TraitKey =
   | "novelty"
   | "momentum";
 
-// Teal is the active-intelligence accent; amber carries strategic weight
-// (revenue and complexity), keeping the palette restrained and coherent.
 const TRAIT_META: { key: TraitKey; label: string; accent: "teal" | "amber" }[] =
   [
     { key: "synergy", label: "Synergy", accent: "teal" },
@@ -54,44 +52,54 @@ function TraitBar({
 }) {
   const fill =
     accent === "teal"
-      ? "linear-gradient(90deg, rgba(0,217,181,0.55), #00D9B5)"
-      : "linear-gradient(90deg, rgba(212,168,67,0.5), #D4A843)";
+      ? "linear-gradient(90deg, rgba(0,217,181,0.45), #00D9B5)"
+      : "linear-gradient(90deg, rgba(212,168,67,0.4), #D4A843)";
   const glow =
     accent === "teal"
-      ? "0 0 10px -2px rgba(0,217,181,0.8)"
-      : "0 0 10px -2px rgba(212,168,67,0.75)";
+      ? "0 0 12px -2px rgba(0,217,181,0.75)"
+      : "0 0 12px -2px rgba(212,168,67,0.7)";
   const textColor = accent === "teal" ? "text-teal" : "text-amber";
+  const qualLabel = traitLabel(value);
 
   return (
-    <div className="flex flex-col gap-2">
-      <div className="flex items-baseline justify-between">
-        <span className="text-[13px] font-medium text-slate-200">{label}</span>
-        <span className="flex items-baseline gap-2.5">
-          <span className="text-[10px] uppercase tracking-wider text-slate-mute">
-            {traitLabel(value)}
+    <div className="flex flex-col gap-1.5">
+      <div className="flex items-baseline justify-between gap-2">
+        <span className="text-[12px] font-medium tracking-wide text-slate-200 md:text-[13px]">
+          {label}
+        </span>
+        <span className="flex items-baseline gap-2">
+          <span className="text-[10px] uppercase tracking-wider text-slate-mute/80">
+            {qualLabel}
           </span>
           <span
-            className={`w-7 text-right font-grotesk text-sm font-semibold tabular-nums ${textColor}`}
+            className={`w-7 text-right font-grotesk text-[13px] font-semibold tabular-nums md:text-sm ${textColor}`}
           >
             {value}
           </span>
         </span>
       </div>
-      <div className="h-[5px] overflow-hidden rounded-full bg-navy-700/50 ring-1 ring-inset ring-white/[0.03]">
+      {/* Track — slightly taller, with an inset shadow for a carved look */}
+      <div className="h-[6px] overflow-hidden rounded-full bg-navy-800/70 ring-1 ring-inset ring-white/[0.04]">
         <motion.div
           className="h-full rounded-full"
           style={{ background: fill, boxShadow: glow }}
           initial={{ width: 0 }}
           animate={{ width: `${value}%` }}
-          transition={{ delay, duration: 0.8, ease: EASE_OUT }}
+          transition={{ delay, duration: 0.85, ease: EASE_OUT }}
         />
       </div>
     </div>
   );
 }
 
+/** Gradient-ruled section header — label + fading line gives a lab-schematic look. */
 function SectionTitle({ children }: { children: React.ReactNode }) {
-  return <p className="label-eyebrow mb-3.5">{children}</p>;
+  return (
+    <div className="mb-3.5 flex items-center gap-3">
+      <p className="label-eyebrow shrink-0">{children}</p>
+      <div className="h-px flex-1 bg-gradient-to-r from-slate-line/50 to-transparent" />
+    </div>
+  );
 }
 
 function StatusBadge({ status }: { status: Idea["status"] }) {
@@ -110,19 +118,27 @@ function StatusBadge({ status }: { status: Idea["status"] }) {
   );
 }
 
-/** Thin terminal meta row — gives the pane its biotech-instrument feel. */
+/** Terminal instrument header — catalog ID, sequence ref, and live indicator. */
 function PaneMeta({ id }: { id: string }) {
   return (
-    <div className="mb-5 flex items-center justify-between border-b border-slate-line/40 pb-3">
-      <span className="font-mono text-[10px] uppercase tracking-widest2 text-slate-mute">
-        DOSSIER · {id}
-      </span>
-      <span className="flex items-center gap-1.5">
-        <span className="h-1.5 w-1.5 rounded-full bg-teal animate-pulse-soft" />
-        <span className="font-mono text-[10px] uppercase tracking-widest2 text-teal/70">
-          Live
-        </span>
-      </span>
+    <div className="mb-5 pb-3" style={{ borderBottom: "1px solid rgba(22,34,63,0.9)" }}>
+      <div className="flex items-center justify-between gap-2">
+        <div className="flex items-center gap-2.5 overflow-hidden">
+          <span className="shrink-0 font-mono text-[9px] uppercase tracking-[0.28em] text-slate-mute/55">
+            SPECIMEN
+          </span>
+          <span className="text-slate-line/60">/</span>
+          <span className="truncate font-mono text-[10px] tracking-[0.14em] text-slate-300/45">
+            {id}
+          </span>
+        </div>
+        <div className="flex shrink-0 items-center gap-1.5">
+          <span className="h-1.5 w-1.5 rounded-full bg-teal animate-pulse-soft shadow-[0_0_6px_1px_rgba(0,217,181,0.45)]" />
+          <span className="font-mono text-[9px] uppercase tracking-[0.22em] text-teal/55">
+            Indexed
+          </span>
+        </div>
+      </div>
     </div>
   );
 }
@@ -137,7 +153,7 @@ function WelcomeState({
     { label: "Avg Synergy", value: ecosystem.avgSynergy, accent: "text-teal" },
     { label: "Avg Momentum", value: ecosystem.avgMomentum, accent: "text-teal" },
     { label: "Build Queue", value: ecosystem.promoted, accent: "text-teal" },
-    { label: "Dormant", value: ecosystem.dormant, accent: "text-slate-200" },
+    { label: "Dormant", value: ecosystem.dormant, accent: "text-slate-300" },
     { label: "Top Species", value: ecosystem.topSpecies, accent: "text-amber" },
   ];
   return (
@@ -153,28 +169,29 @@ function WelcomeState({
 
       <div className="flex-1">
         <SectionTitle>Intelligence Feed</SectionTitle>
-        <h2 className="font-grotesk text-[26px] font-semibold leading-[1.15] tracking-tight text-slate-50 text-balance">
+        <h2 className="font-grotesk text-[22px] font-semibold leading-[1.18] tracking-tight text-slate-50 text-balance md:text-[26px] md:leading-[1.15]">
           The habitat is alive.
         </h2>
-        <p className="mt-3.5 text-[13px] leading-relaxed text-slate-ink">
+        <p className="mt-3 text-[12px] leading-relaxed text-slate-ink md:mt-3.5 md:text-[13px]">
           Every organism is a venture concept. Its motion, mass, and glow encode
           synergy, revenue, joy, complexity, novelty, and momentum. Select one to
           open its dossier — or drag two together to test a crossbreed.
         </p>
 
-        <div className="mt-8 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-line/40 bg-navy-900/30">
+        {/* Ecosystem metrics grid */}
+        <div className="mt-6 grid grid-cols-3 overflow-hidden rounded-xl border border-slate-line/40 bg-navy-900/30 md:mt-8">
           {stats.map((s, i) => (
             <div
               key={s.label}
               className={[
-                "p-4",
+                "p-3 md:p-4",
                 i % 3 !== 2 ? "border-r border-slate-line/30" : "",
                 i < 3 ? "border-b border-slate-line/30" : "",
               ].join(" ")}
             >
-              <p className="label-eyebrow">{s.label}</p>
+              <p className="label-eyebrow text-[8px] md:text-[10px]">{s.label}</p>
               <p
-                className={`mt-2.5 font-grotesk text-lg font-semibold tabular-nums ${s.accent}`}
+                className={`mt-2 font-grotesk text-base font-semibold tabular-nums md:mt-2.5 md:text-lg ${s.accent}`}
               >
                 {s.value}
               </p>
@@ -183,16 +200,16 @@ function WelcomeState({
         </div>
       </div>
 
-      <div className="mt-6 space-y-3 rounded-xl border border-slate-line/40 bg-navy-900/30 p-4">
+      <div className="mt-5 space-y-2.5 rounded-xl border border-slate-line/40 bg-navy-900/30 p-4 md:mt-6">
         <p className="label-eyebrow">How to operate</p>
-        <ul className="space-y-2 text-[13px] leading-snug text-slate-ink">
+        <ul className="space-y-2 text-[12px] leading-snug text-slate-ink md:text-[13px]">
           {[
-            "Click an organism to inspect its strategic dossier",
+            "Tap an organism to inspect its strategic dossier",
             "Drag one near another to surface a hybrid",
             "Toggle Calm / Active to change ecosystem tempo",
           ].map((line, i) => (
             <li key={i} className="flex items-start gap-2.5">
-              <span className="mt-[7px] h-1 w-1 shrink-0 rounded-full bg-teal/60" />
+              <span className="mt-[6px] h-1 w-1 shrink-0 rounded-full bg-teal/60" />
               {line}
             </li>
           ))}
@@ -232,7 +249,7 @@ function HybridCard({
           type="button"
           onClick={onDismiss}
           whileTap={{ scale: 0.9 }}
-          className="focus-ring -mr-1 -mt-1 rounded-full p-1.5 text-slate-mute transition-colors hover:text-slate-100"
+          className="focus-ring -mr-1 -mt-1 min-h-[36px] min-w-[36px] rounded-full p-1.5 text-slate-mute transition-colors hover:text-slate-100"
           aria-label="Dismiss hybrid"
         >
           <svg
@@ -246,7 +263,7 @@ function HybridCard({
           </svg>
         </motion.button>
       </div>
-      <p className="mt-3 text-[13px] leading-relaxed text-slate-ink">
+      <p className="mt-3 text-[12px] leading-relaxed text-slate-ink md:text-[13px]">
         {hybrid.rationale}
       </p>
       <div className="mt-4 grid grid-cols-3 gap-2">
@@ -305,29 +322,33 @@ function DossierState({
     >
       <PaneMeta id={idea.id.toUpperCase()} />
 
-      <div className="-mr-3 flex-1 overflow-y-auto pr-3">
+      <div className="-mr-2 flex-1 overflow-y-auto pr-2 md:-mr-3 md:pr-3">
         <AnimatePresence>
           {hybrid && <HybridCard hybrid={hybrid} onDismiss={onDismissHybrid} />}
         </AnimatePresence>
 
-        {/* Identity */}
-        <div className="flex items-center justify-between gap-3">
-          <p className="text-[11px] uppercase tracking-widest2 text-teal/80">
+        {/* Identity — classification header */}
+        <div className="flex flex-wrap items-center justify-between gap-2">
+          <p className="font-mono text-[10px] uppercase tracking-[0.26em] text-teal/75">
             {idea.species}
           </p>
           <StatusBadge status={idea.status} />
         </div>
-        <h2 className="mt-2.5 font-grotesk text-[26px] font-semibold leading-[1.1] tracking-tight text-slate-50">
+
+        {/* Specimen name — prominent, anchored */}
+        <h2 className="mt-2 font-grotesk text-[22px] font-semibold leading-[1.12] tracking-tight text-slate-50 md:mt-2.5 md:text-[26px] md:leading-[1.1]">
           {idea.name}
         </h2>
-        <p className="mt-3.5 text-[13px] leading-relaxed text-slate-ink">
+
+        {/* Description */}
+        <p className="mt-3 text-[12px] leading-relaxed text-slate-ink md:text-[13px]">
           {idea.description}
         </p>
 
-        {/* Traits */}
-        <div className="mt-8">
-          <SectionTitle>Strategic Traits</SectionTitle>
-          <div className="grid grid-cols-1 gap-4">
+        {/* Strategic Traits */}
+        <div className="mt-7 md:mt-8">
+          <SectionTitle>Strategic Profile</SectionTitle>
+          <div className="grid grid-cols-1 gap-3.5 md:gap-4">
             {TRAIT_META.map((t, i) => (
               <TraitBar
                 key={t.key}
@@ -340,10 +361,10 @@ function DossierState({
           </div>
         </div>
 
-        {/* Tags */}
-        <div className="mt-8">
+        {/* Signals */}
+        <div className="mt-7 md:mt-8">
           <SectionTitle>Signals</SectionTitle>
-          <div className="flex flex-wrap gap-2">
+          <div className="flex flex-wrap gap-1.5 md:gap-2">
             {idea.tags.map((tag) => (
               <span
                 key={tag}
@@ -355,18 +376,24 @@ function DossierState({
           </div>
         </div>
 
-        {/* Best adjacent */}
+        {/* Best adjacent node */}
         {best && (
-          <div className="mt-8">
-            <SectionTitle>Best Adjacent Node</SectionTitle>
-            <div className="group flex items-center justify-between rounded-xl border border-slate-line/50 bg-navy-900/40 p-4 transition-colors hover:border-teal/30">
+          <div className="mt-7 md:mt-8">
+            <SectionTitle>Strongest Connection</SectionTitle>
+            <div className="group flex items-center justify-between gap-3 rounded-xl border border-slate-line/50 bg-navy-900/40 p-4 transition-all duration-300 hover:border-teal/30 hover:bg-navy-900/60">
               <div className="flex items-center gap-3">
-                <span className="h-7 w-7 rounded-full border border-teal/30 bg-teal/5" />
+                {/* Connection indicator */}
+                <div className="relative flex h-8 w-8 shrink-0 items-center justify-center">
+                  <span className="absolute inset-0 rounded-full border border-teal/20 transition-colors group-hover:border-teal/40" />
+                  <span className="h-1.5 w-1.5 rounded-full bg-teal/50 transition-colors group-hover:bg-teal/80" />
+                </div>
                 <div>
                   <p className="font-grotesk text-sm font-medium text-slate-100">
                     {best.name}
                   </p>
-                  <p className="text-[11px] text-slate-mute">{best.species}</p>
+                  <p className="text-[10px] uppercase tracking-wider text-slate-mute">
+                    {best.species}
+                  </p>
                 </div>
               </div>
               <div className="text-right">
@@ -381,27 +408,29 @@ function DossierState({
           </div>
         )}
 
-        {/* Mutations */}
-        <div className="mt-8 pb-1">
+        {/* Mutation Vectors */}
+        <div className="mt-7 pb-1 md:mt-8">
           <SectionTitle>Mutation Vectors</SectionTitle>
           <div className="space-y-2">
             {idea.mutationIdeas.map((m, i) => (
               <div
                 key={i}
-                className="group flex items-start gap-3 rounded-lg border border-slate-line/40 bg-navy-900/30 p-3.5 transition-colors hover:border-teal/25 hover:bg-navy-800/30"
+                className="group flex items-start gap-3 rounded-lg border border-slate-line/40 bg-navy-900/30 p-3 transition-all duration-300 hover:border-teal/25 hover:bg-navy-800/30 md:p-3.5"
               >
-                <span className="mt-px font-mono text-[11px] font-semibold tabular-nums text-teal/50">
+                <span className="mt-px shrink-0 font-mono text-[10px] font-semibold tabular-nums text-teal/50 md:text-[11px]">
                   {String(i + 1).padStart(2, "0")}
                 </span>
-                <p className="text-[13px] leading-relaxed text-slate-ink">{m}</p>
+                <p className="text-[12px] leading-relaxed text-slate-ink md:text-[13px]">
+                  {m}
+                </p>
               </div>
             ))}
           </div>
         </div>
       </div>
 
-      {/* CTAs */}
-      <div className="mt-5 flex flex-col gap-2.5 border-t border-slate-line/40 pt-5">
+      {/* CTA zone — fixed at bottom of panel */}
+      <div className="mt-4 flex flex-col gap-2 border-t border-slate-line/40 pt-4 md:mt-5 md:gap-2.5 md:pt-5">
         <motion.button
           type="button"
           onClick={() => onPromote(idea)}
@@ -409,7 +438,7 @@ function DossierState({
           whileHover={idea.status === "promoted" ? undefined : { scale: 1.012 }}
           whileTap={idea.status === "promoted" ? undefined : { scale: 0.985 }}
           transition={{ type: "spring", stiffness: 400, damping: 26 }}
-          className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl border border-teal/50 bg-teal/15 py-3 text-sm font-semibold text-teal transition-colors duration-300 hover:bg-teal/25 hover:shadow-[0_0_30px_-10px_rgba(0,217,181,0.8)] disabled:cursor-not-allowed disabled:border-slate-line/50 disabled:bg-navy-800/40 disabled:text-slate-mute disabled:shadow-none"
+          className="focus-ring flex min-h-[48px] w-full items-center justify-center gap-2 rounded-xl border border-teal/50 bg-teal/15 py-3 text-sm font-semibold text-teal transition-colors duration-300 hover:bg-teal/25 hover:shadow-[0_0_30px_-10px_rgba(0,217,181,0.8)] disabled:cursor-not-allowed disabled:border-slate-line/50 disabled:bg-navy-800/40 disabled:text-slate-mute disabled:shadow-none"
         >
           <svg
             className="h-4 w-4"
@@ -430,7 +459,7 @@ function DossierState({
           whileHover={{ scale: 1.012 }}
           whileTap={{ scale: 0.985 }}
           transition={{ type: "spring", stiffness: 400, damping: 26 }}
-          className="focus-ring flex w-full items-center justify-center gap-2 rounded-xl border border-slate-line/60 bg-navy-800/30 py-2.5 text-sm font-medium text-slate-ink transition-colors duration-300 hover:border-amber/40 hover:text-amber"
+          className="focus-ring flex min-h-[44px] w-full items-center justify-center gap-2 rounded-xl border border-slate-line/60 bg-navy-800/30 py-2.5 text-sm font-medium text-slate-ink transition-colors duration-300 hover:border-amber/40 hover:text-amber"
         >
           <svg
             className="h-4 w-4"
@@ -451,10 +480,16 @@ function DossierState({
 export function IdeaPanel(props: IdeaPanelProps) {
   const { selected, hybrid, ideaById, ecosystem } = props;
   return (
-    <aside className="glass relative flex h-full w-[400px] shrink-0 flex-col overflow-hidden rounded-2xl shadow-panel">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal/30 to-transparent" />
-      <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/[0.02]" />
-      <div className="flex h-full flex-col p-6">
+    /*
+      Mobile:  flex-1 min-h-0  — takes remaining height below aquarium, scrolls internally
+      Desktop: h-full w-[380px] shrink-0 — fixed-width right sidebar
+    */
+    <aside className="glass relative flex min-h-0 flex-1 flex-col overflow-hidden rounded-xl shadow-panel md:h-full md:w-[380px] md:flex-none md:shrink-0 md:rounded-2xl">
+      {/* Top accent lines */}
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal/35 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 rounded-xl ring-1 ring-inset ring-white/[0.02] md:rounded-2xl" />
+
+      <div className="flex h-full flex-col p-4 md:p-6">
         <AnimatePresence mode="wait">
           {selected ? (
             <DossierState
