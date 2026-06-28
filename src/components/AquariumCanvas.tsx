@@ -4,6 +4,24 @@ import { Organism, Simulation } from "../lib/simulation";
 import { drawOrganism } from "../lib/organisms";
 import { PALETTE, rgba } from "../lib/color";
 import { clamp, distance } from "../lib/utils";
+import {
+  buildLightShafts,
+  buildBubbleVents,
+  buildSediment,
+  buildKelp,
+  paintLightShafts,
+  paintCaustics,
+  paintThermocline,
+  updateAndPaintBubbles,
+  paintSeaFloor,
+  paintKelp,
+  paintMurk,
+  type LightShaft,
+  type Bubble,
+  type BubbleVent,
+  type Sediment,
+  type KelpStrand,
+} from "../lib/environment";
 
 interface AquariumCanvasProps {
   ideas: Idea[];
@@ -56,6 +74,11 @@ export function AquariumCanvas({
   } | null>(null);
   const mergeCandidateRef = useRef<Organism | null>(null);
   const motesRef = useRef<Mote[]>([]);
+  const shaftsRef = useRef<LightShaft[]>([]);
+  const bubblesRef = useRef<Bubble[]>([]);
+  const ventsRef = useRef<BubbleVent[]>([]);
+  const sedimentRef = useRef<Sediment[]>([]);
+  const kelpRef = useRef<KelpStrand[]>([]);
 
   useEffect(() => {
     selectedRef.current = selectedId;
@@ -110,15 +133,22 @@ export function AquariumCanvas({
     const sim = simRef.current;
 
     if (motesRef.current.length === 0) {
-      const count = 56;
+      const count = 84;
       motesRef.current = Array.from({ length: count }, (_, i) => ({
         x: Math.random() * width,
         y: Math.random() * height,
         z: Math.random(),
         drift: Math.random() * Math.PI * 2,
-        warm: i % 10 === 0,
+        warm: i % 9 === 0,
       }));
     }
+
+    // Precompute static atmosphere structures once (resolution-independent —
+    // they store fractional positions, so they survive resize untouched).
+    if (shaftsRef.current.length === 0) shaftsRef.current = buildLightShafts();
+    if (ventsRef.current.length === 0) ventsRef.current = buildBubbleVents();
+    if (sedimentRef.current.length === 0) sedimentRef.current = buildSediment();
+    if (kelpRef.current.length === 0) kelpRef.current = buildKelp();
 
     const ro = new ResizeObserver(() => {
       applySize();
@@ -226,7 +256,14 @@ export function AquariumCanvas({
           matching: matchingRef.current,
           filtersActive: filtersActiveRef.current,
         },
-        motesRef.current,
+        {
+          motes: motesRef.current,
+          shafts: shaftsRef.current,
+          bubbles: bubblesRef.current,
+          vents: ventsRef.current,
+          sediment: sedimentRef.current,
+          kelp: kelpRef.current,
+        },
       );
 
       raf = requestAnimationFrame(frame);
@@ -269,17 +306,37 @@ interface DrawState {
   filtersActive: boolean;
 }
 
+interface SceneLayers {
+  motes: Mote[];
+  shafts: LightShaft[];
+  bubbles: Bubble[];
+  vents: BubbleVent[];
+  sediment: Sediment[];
+  kelp: KelpStrand[];
+}
+
 function draw(
   ctx: CanvasRenderingContext2D,
   sim: Simulation,
   s: DrawState,
-  motes: Mote[],
+  layers: SceneLayers,
 ) {
   const { width, height, now } = s;
 
   ctx.clearRect(0, 0, width, height);
+
+  // --- Environment: behind the creatures ---------------------------------
+  // Deep water column, then descending light, refracted caustics, drifting
+  // thermocline haze, the sea bed and its swaying flora, finally suspended
+  // particulate. This builds the world the creatures swim through.
   paintBackground(ctx, width, height, now);
-  paintMarineSnow(ctx, motes, width, height, s.dt);
+  paintLightShafts(ctx, layers.shafts, width, height, now);
+  paintCaustics(ctx, width, height, now);
+  paintThermocline(ctx, width, height, now);
+  paintSeaFloor(ctx, layers.sediment, width, height, now);
+  paintKelp(ctx, layers.kelp, width, height, now);
+  updateAndPaintBubbles(ctx, layers.bubbles, layers.vents, width, height, now, s.dt);
+  paintMarineSnow(ctx, layers.motes, width, height, s.dt);
 
   const anySelected = s.selectedId !== null;
 
@@ -331,6 +388,9 @@ function draw(
     if (a > 0.05 && !dimmed) drawLabel(ctx, o, a);
   }
 
+  // Foreground depth-of-field murk drifts in front of the scene so the water
+  // reads as thick — then the vignette frames everything.
+  paintMurk(ctx, width, height, now);
   paintVignette(ctx, width, height);
 }
 
@@ -340,10 +400,14 @@ function paintBackground(
   h: number,
   now: number,
 ) {
+  // Deep water column: cooler/brighter near the surface, falling off into
+  // near-black at depth — the eye reads it as looking down into deep water.
   const base = ctx.createLinearGradient(0, 0, 0, h);
-  base.addColorStop(0, "#070D20");
+  base.addColorStop(0, "#0A1428");
+  base.addColorStop(0.18, "#081020");
   base.addColorStop(0.5, "#050A18");
-  base.addColorStop(1, "#02050D");
+  base.addColorStop(0.78, "#030610");
+  base.addColorStop(1, "#01030A");
   ctx.fillStyle = base;
   ctx.fillRect(0, 0, w, h);
 
@@ -402,24 +466,29 @@ function paintMarineSnow(
   ctx.save();
   ctx.globalCompositeOperation = "lighter";
   for (const p of motes) {
-    p.drift += 0.006 * dt;
-    p.y -= (0.02 + p.z * 0.08) * dt;
-    p.x += Math.sin(p.drift) * 0.08 * dt;
+    // Parallax: near motes (high z) are larger, drift faster, and sink/rise
+    // more; far motes barely move, giving a sense of a deep water column.
+    p.drift += (0.004 + p.z * 0.005) * dt;
+    p.y -= (0.012 + p.z * 0.11) * dt;
+    p.x += Math.sin(p.drift) * (0.04 + p.z * 0.09) * dt;
     if (p.y < -4) {
       p.y = h + 4;
       p.x = Math.random() * w;
     }
     if (p.x < -4) p.x = w + 4;
     if (p.x > w + 4) p.x = -4;
-    const r = 0.4 + p.z * 1.4;
-    const color = p.warm ? PALETTE.amber : PALETTE.teal;
+    // Size & alpha both scale with depth; a slow shimmer adds life.
+    const shimmer = 0.78 + 0.22 * Math.sin(p.drift * 2.3);
+    const r = 0.35 + p.z * p.z * 1.7;
+    const color = p.warm ? PALETTE.amberGlow : PALETTE.teal;
     // Soft, blurred particulate (radial fade), not crisp dots.
-    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.4);
-    g.addColorStop(0, rgba(color, 0.05 + p.z * 0.08));
+    const a = (0.035 + p.z * 0.09) * shimmer;
+    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.6);
+    g.addColorStop(0, rgba(color, a));
     g.addColorStop(1, "rgba(0,0,0,0)");
     ctx.fillStyle = g;
     ctx.beginPath();
-    ctx.arc(p.x, p.y, r * 2.4, 0, Math.PI * 2);
+    ctx.arc(p.x, p.y, r * 2.6, 0, Math.PI * 2);
     ctx.fill();
   }
   ctx.restore();
