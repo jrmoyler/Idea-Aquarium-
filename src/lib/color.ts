@@ -88,3 +88,24 @@ export function ideaBaseColor(revenue: number): string {
 export function clamp01(v: number): number {
   return v < 0 ? 0 : v > 1 ? 1 : v;
 }
+
+// --- Add-only helpers for deep-sea creature shading -------------------------
+
+/** Extended palette entries for subsurface shading. Cool deep-blue used for the
+ * shadowed undersides of translucent bodies (countershading). */
+export const PALETTE_EXT = {
+  abyssBlue: "#0A2A4A",
+  coolShadow: "#102844",
+  scatterCyan: "#9CF6E8",
+} as const;
+
+/** Darken a color toward black by amount 0..1, returns hex. */
+export function darken(color: string, amount: number): string {
+  return mixHex(color, "#000000", amount);
+}
+
+/** Shift a color toward a cooler deep-blue by amount 0..1 — used to tint the
+ * shadowed underside of a translucent body (directional light). */
+export function coolShade(color: string, amount: number): string {
+  return mixHex(color, PALETTE_EXT.coolShadow, amount);
+}

@@ -37,6 +37,40 @@ export interface Vein {
   wobble: number;
 }
 
+/** A subtle eye glint (cephalopods get a pair, larvae a single faint spot). */
+export interface EyeSpot {
+  x: number; // local offset, radius units
+  y: number;
+  r: number; // radius units
+  bright: number; // 0..1 base luminosity
+}
+
+/** A radial bell canal/septum for the medusa dome — a faint internal rib that
+ * fans from the apex toward the margin. Animated, never a stroked spoke. */
+export interface BellCanal {
+  angle: number; // direction from apex, local frame
+  curve: number; // lateral bow so canals are not straight rays
+  bright: number;
+}
+
+/** A slow-drifting chromatophore-like mottle patch for cephalopod skin. */
+export interface MottlePatch {
+  x: number; // local offset, radius units
+  y: number;
+  r: number; // radius units
+  phase: number; // slow flicker phase
+  warm: boolean;
+}
+
+/** A faint bioluminescent freckle scattered through the flesh (micro-texture). */
+export interface Freckle {
+  x: number; // local offset, radius units (sampled within unit disc)
+  y: number;
+  r: number; // radius units, small
+  phase: number;
+  warm: boolean;
+}
+
 export interface RenderProfile {
   archetype: Archetype;
 
@@ -54,6 +88,14 @@ export interface RenderProfile {
   pockets: Pocket[];
   veins: Vein[];
   finSpan: number; // side-fin reach (hunter / swarmer)
+
+  // --- Realism anatomy (grown deterministically) ---
+  eyes: EyeSpot[]; // sensory glints (hunter pair / swarmer single; empty otherwise)
+  bellCanals: BellCanal[]; // radial canals of the medusa dome (drifter only)
+  gastroRing: number; // 0..1 strength of the medusa gastrovascular ring (drifter)
+  mottle: MottlePatch[]; // chromatophore-like skin patches (hunter)
+  freckles: Freckle[]; // faint bioluminescent micro-texture across all bodies
+  gut: number; // 0..1 strength of an internal gut/organ streak (swarmer/floater)
 
   warmth: number; // 0..1 internal amber metabolic richness (revenue)
   density: number; // 0..1 internal layering (complexity)
@@ -88,6 +130,11 @@ export function buildProfile(
   let cilia = 0;
   let aspect = 1;
   let finSpan = 0;
+  const eyes: EyeSpot[] = [];
+  const bellCanals: BellCanal[] = [];
+  const mottle: MottlePatch[] = [];
+  let gastroRing = 0;
+  let gut = 0;
 
   const swayBase = 0.05 + joy * 0.06;
 
@@ -124,6 +171,18 @@ export function buildProfile(
         });
       }
       cilia = 14 + Math.floor(rng() * 8);
+      // Radial canals fanning from the apex down the bell — a believable medusa
+      // internal structure. Count scales gently with complexity.
+      const canalCount = 5 + Math.floor(rng() * 3) + Math.round(complexity * 3);
+      for (let i = 0; i < canalCount; i++) {
+        bellCanals.push({
+          angle: (i / canalCount) * Math.PI * 2 + (rng() - 0.5) * 0.2,
+          curve: (rng() - 0.5) * 0.5,
+          bright: range(rng, 0.5, 1),
+        });
+      }
+      gastroRing = 0.5 + complexity * 0.4;
+      // Jellyfish have no eyes.
       break;
     }
     case "swarmer": {
@@ -154,6 +213,16 @@ export function buildProfile(
       }
       finSpan = range(rng, 0.5, 0.8);
       cilia = 4 + Math.floor(rng() * 3);
+      // A single faint sensory eye spot near the head (leading edge, +x), set
+      // slightly off the midline so it never reads as a centred cartoon dot.
+      eyes.push({
+        x: range(rng, 0.42, 0.58),
+        y: (rng() < 0.5 ? -1 : 1) * range(rng, 0.06, 0.14),
+        r: range(rng, 0.1, 0.15),
+        bright: range(rng, 0.45, 0.7),
+      });
+      // A translucent gut streak running the body length.
+      gut = 0.6 + complexity * 0.4;
       break;
     }
     case "floater": {
@@ -174,6 +243,8 @@ export function buildProfile(
         });
       }
       cilia = 10 + Math.floor(rng() * 8);
+      // A faint suspended gut/organ knot inside the fragile sac.
+      gut = 0.35 + complexity * 0.35;
       break;
     }
     case "hunter": {
@@ -196,6 +267,29 @@ export function buildProfile(
       }
       finSpan = range(rng, 0.9, 1.25);
       cilia = 0;
+      // A symmetric pair of eyes set back from the arm crown, toward the head
+      // (+x). Kept dim and small — sensory glints, not googly eyes.
+      {
+        const ex = range(rng, 0.34, 0.46);
+        const ey = range(rng, 0.16, 0.26);
+        const er = range(rng, 0.1, 0.15);
+        const eb = range(rng, 0.4, 0.6);
+        eyes.push({ x: ex, y: -ey, r: er, bright: eb });
+        eyes.push({ x: ex, y: ey, r: er, bright: eb });
+      }
+      // Chromatophore-like patches scattered over the mantle that flicker slowly.
+      const mottleCount = 4 + Math.floor(rng() * 4) + Math.round(complexity * 3);
+      for (let i = 0; i < mottleCount; i++) {
+        const ang = rng() * Math.PI * 2;
+        const dist = range(rng, 0.15, 0.7);
+        mottle.push({
+          x: Math.cos(ang) * dist * aspect,
+          y: Math.sin(ang) * dist * 0.6,
+          r: range(rng, 0.12, 0.26),
+          phase: rng() * Math.PI * 2,
+          warm: rng() < 0.35 + revenue * 0.4,
+        });
+      }
       break;
     }
     default: {
@@ -232,6 +326,24 @@ export function buildProfile(
     });
   }
 
+  // Faint bioluminescent freckles scattered through the flesh so the membrane
+  // is never a flat gradient. Sampled within the unit disc; count is modest for
+  // performance and scales a little with complexity.
+  const freckleCount = 8 + Math.round(complexity * 10);
+  const freckles: Freckle[] = [];
+  for (let i = 0; i < freckleCount; i++) {
+    // Rejection-free disc sample via sqrt radius for even spread.
+    const fa = rng() * Math.PI * 2;
+    const fr = Math.sqrt(rng()) * 0.82;
+    freckles.push({
+      x: Math.cos(fa) * fr,
+      y: Math.sin(fa) * fr,
+      r: range(rng, 0.012, 0.03),
+      phase: rng() * Math.PI * 2,
+      warm: rng() < 0.25 + revenue * 0.5,
+    });
+  }
+
   return {
     archetype,
     lobeAmp,
@@ -246,6 +358,12 @@ export function buildProfile(
     pockets,
     veins,
     finSpan,
+    eyes,
+    bellCanals,
+    gastroRing,
+    mottle,
+    freckles,
+    gut,
     warmth: revenue,
     density: complexity,
     jitterSeed: rng() * 1000,
