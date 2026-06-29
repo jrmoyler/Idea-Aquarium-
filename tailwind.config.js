@@ -6,27 +6,27 @@ export default {
       colors: {
         // Core brand palette
         navy: {
-          DEFAULT: "#050A18",
-          950: "#03060F",
-          900: "#050A18",
-          850: "#070E22",
-          800: "#0A1430",
-          700: "#0F1C42",
+          DEFAULT: "#eaf8ff",
+          950: "#d5efff",
+          900: "#eaf8ff",
+          850: "#dff5ff",
+          800: "#cceefe",
+          700: "#b8e7fd",
         },
         teal: {
-          DEFAULT: "#00D9B5",
-          glow: "#1EF5D2",
-          dim: "#0B8A78",
+          DEFAULT: "#06B6D4",
+          glow: "#22D3EE",
+          dim: "#0E7490",
         },
         amber: {
-          DEFAULT: "#D4A843",
-          glow: "#F0C766",
-          dim: "#8A6E2C",
+          DEFAULT: "#F59E0B",
+          glow: "#FACC15",
+          dim: "#B45309",
         },
         slate: {
-          ink: "#8FA0BF",
-          mute: "#5A6A87",
-          line: "#16223F",
+          ink: "#334155",
+          mute: "#64748B",
+          line: "#c6def0",
         },
       },
       fontFamily: {

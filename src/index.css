@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    color-scheme: dark;
+    color-scheme: light;
   }
 
   html,
@@ -15,8 +15,8 @@
 
   body {
     margin: 0;
-    background-color: #050a18;
-    color: #d7e0f0;
+    background: linear-gradient(135deg, #e7fbff 0%, #dff7ff 45%, #dcfaea 100%);
+    color: #1f2a44;
     font-family: "Space Grotesk", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -51,11 +51,11 @@
   .glass {
     background: linear-gradient(
       180deg,
-      rgba(11, 20, 44, 0.7) 0%,
-      rgba(6, 11, 27, 0.8) 100%
+      rgba(255, 255, 255, 0.86) 0%,
+      rgba(233, 252, 255, 0.78) 100%
     );
     backdrop-filter: blur(16px);
-    border: 1px solid rgba(143, 160, 191, 0.08);
+    border: 1px solid rgba(255, 255, 255, 0.8);
   }
 
   .label-eyebrow {
