@@ -7,7 +7,7 @@ interface MetricPillProps {
 const ACCENT: Record<NonNullable<MetricPillProps["accent"]>, string> = {
   teal: "text-teal",
   amber: "text-amber",
-  neutral: "text-slate-200",
+  neutral: "text-slate-800",
 };
 
 /** Compact metric readout used in the header's ecosystem strip. */

@@ -22,7 +22,7 @@ export function FilterChip({ label, active, count, onClick }: FilterChipProps) {
         "text-xs font-medium transition-colors duration-300",
         active
           ? "border border-teal/45 bg-teal/10 text-teal shadow-[0_0_20px_-8px_rgba(0,217,181,0.7)]"
-          : "border border-slate-line/60 bg-navy-800/30 text-slate-mute hover:border-slate-ink/40 hover:bg-navy-800/60 hover:text-slate-200",
+          : "border border-slate-line/60 bg-navy-800/30 text-slate-mute hover:border-slate-ink/40 hover:bg-navy-800/60 hover:text-slate-700",
       ].join(" ")}
     >
       <span
