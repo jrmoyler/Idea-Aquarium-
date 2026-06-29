@@ -4,7 +4,7 @@
 
 @layer base {
   :root {
-    color-scheme: light;
+    color-scheme: dark;
   }
 
   html,
@@ -15,8 +15,20 @@
 
   body {
     margin: 0;
-    background: linear-gradient(135deg, #e7fbff 0%, #dff7ff 45%, #dcfaea 100%);
-    color: #1f2a44;
+    /* Deep tank gradient — the chrome shares the canvas's atmosphere. */
+    background:
+      radial-gradient(
+        1200px 600px at 70% -10%,
+        rgba(34, 211, 197, 0.08),
+        transparent 60%
+      ),
+      radial-gradient(
+        900px 500px at 10% 110%,
+        rgba(245, 196, 81, 0.05),
+        transparent 55%
+      ),
+      linear-gradient(160deg, #060d16 0%, #081320 48%, #06101b 100%);
+    color: #c4d4e4;
     font-family: "Space Grotesk", system-ui, sans-serif;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
@@ -34,28 +46,36 @@
     background: transparent;
   }
   *::-webkit-scrollbar-thumb {
-    background: rgba(143, 160, 191, 0.18);
+    background: rgba(126, 147, 173, 0.22);
     border-radius: 999px;
+    border: 2px solid transparent;
+    background-clip: padding-box;
   }
   *::-webkit-scrollbar-thumb:hover {
-    background: rgba(0, 217, 181, 0.35);
+    background: rgba(34, 211, 197, 0.45);
+    background-clip: padding-box;
+  }
+  * {
+    scrollbar-color: rgba(126, 147, 173, 0.22) transparent;
+    scrollbar-width: thin;
   }
 
   ::selection {
-    background: rgba(0, 217, 181, 0.25);
-    color: #07343d;
+    background: rgba(34, 211, 197, 0.3);
+    color: #eafffb;
   }
 }
 
 @layer components {
+  /* Frosted instrument surface used by the header and side panel. */
   .glass {
     background: linear-gradient(
       180deg,
-      rgba(255, 255, 255, 0.86) 0%,
-      rgba(233, 252, 255, 0.78) 100%
+      rgba(19, 36, 51, 0.72) 0%,
+      rgba(10, 22, 34, 0.78) 100%
     );
-    backdrop-filter: blur(16px);
-    border: 1px solid rgba(255, 255, 255, 0.8);
+    backdrop-filter: blur(18px) saturate(120%);
+    border: 1px solid rgba(255, 255, 255, 0.06);
   }
 
   .label-eyebrow {
@@ -63,14 +83,19 @@
     line-height: 1;
     letter-spacing: 0.28em;
     text-transform: uppercase;
-    color: #5a6a87;
+    color: #7e93ad;
   }
 
+  /* Keyboard-only focus ring — consistent across every interactive control. */
   .focus-ring {
     outline: none;
   }
   .focus-ring:focus-visible {
-    box-shadow: 0 0 0 1px rgba(0, 217, 181, 0.5);
+    outline: none;
+    box-shadow:
+      0 0 0 2px rgba(6, 13, 22, 1),
+      0 0 0 4px rgba(34, 211, 197, 0.65);
+    border-radius: inherit;
   }
 }
 
@@ -81,5 +106,18 @@
   .drag-none {
     -webkit-user-drag: none;
     user-select: none;
+  }
+}
+
+/* Respect users who prefer reduced motion: neutralize transforms/animations
+   from both CSS and framer-motion-driven inline transitions. */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.001ms !important;
+    animation-iteration-count: 1 !important;
+    transition-duration: 0.001ms !important;
+    scroll-behavior: auto !important;
   }
 }

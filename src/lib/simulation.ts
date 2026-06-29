@@ -165,14 +165,21 @@ export class Simulation {
 
   private spawn(ideas: Idea[]) {
     const rng = mulberry32(0x1dea_a9a1);
-    this.organisms = ideas.map((idea) => {
+    const n = ideas.length;
+    // Spread creatures across the width with a jittered even spacing so the tank
+    // never opens with everyone bunched in one column. Each gets its own slot,
+    // nudged by a little noise so the grid is invisible.
+    this.organisms = ideas.map((idea, i) => {
       const seed = hashString(idea.id);
       const local = mulberry32(seed);
       const depthBias = idea.status === "dormant" ? 0.74 : 0.44;
+      // Even horizontal slot in [0.12, 0.88] plus per-slot jitter.
+      const slot = n > 1 ? i / (n - 1) : 0.5;
+      const fx = 0.12 + slot * 0.76 + (rng() - 0.5) * (0.76 / Math.max(n, 4));
       const startY =
         this.height * (depthBias - 0.12) + local() * this.height * 0.3;
       return this.createOrganism(idea, {
-        x: this.width * (0.18 + rng() * 0.64),
+        x: clamp(this.width * fx, 60, this.width - 60),
         y: clamp(startY, 60, this.height - 60),
       });
     });
@@ -254,11 +261,16 @@ export class Simulation {
         existing.depthBias = idea.status === "dormant" ? 0.74 : 0.44;
         existing.baseColor = ideaBaseColor(idea.revenue);
       } else {
+        // A newborn enters near the centre, then swims to its preferred band.
         const o = this.createOrganism(idea, {
-          x: this.width * 0.5 + (Math.random() - 0.5) * 80,
-          y: this.height * 0.44 + (Math.random() - 0.5) * 80,
+          x: this.width * 0.5 + (Math.random() - 0.5) * 120,
+          y: this.height * 0.42 + (Math.random() - 0.5) * 100,
         });
+        o.y = clamp(o.y, 50, this.height - 50);
         o.mergeGlow = 1; // brief birth flush
+        o.resonance = 0.6; // arrives glowing, then settles
+        o.excitement = 0.55; // a little kick of life on arrival
+        o.presence = 1;
         this.organisms.push(o);
         this.byId.set(o.idea.id, o);
       }
@@ -295,6 +307,11 @@ export class Simulation {
     draggedId: string | null,
     mergeCandidateId: string | null,
   ) {
+    // Guard against pathological dt (tab refocus, breakpoints): clamp again and
+    // bail on non-finite values so a bad frame can never inject NaN into state.
+    if (!Number.isFinite(dt) || dt <= 0) return;
+    dt = dt > 3 ? 3 : dt;
+
     const tempo = MODE_TEMPO[this.mode];
     const orgs = this.organisms;
     const dragged = draggedId ? this.byId.get(draggedId) : null;
@@ -302,13 +319,38 @@ export class Simulation {
     this.currentTime += dt;
     const ct = this.currentTime;
 
+    // When the user has focused (selected) a creature, the whole ecosystem
+    // gently settles into a calmer register — a soft "everyone pauses to watch"
+    // beat that makes selection feel consequential. `presence` eases toward this.
+    const focusActive = selectedId !== null;
+
     for (const o of orgs) {
       const m = MOTION[o.archetype];
       const dormant = o.idea.status === "dormant";
       const slow = dormant ? 0.55 : 1;
       const selected = o.idea.id === selectedId;
+      const isMerge = o.idea.id === mergeCandidateId;
       // A selected creature settles into a graceful hover; excitement fades.
       const composure = selected ? 0.45 : 1;
+
+      // --- Presence: 1 for the focused creature (and when nothing is focused),
+      // gently dipping for the rest so the chosen one stands out as the others
+      // calm and recede. Eased to avoid any visible snap.
+      const presenceTarget = !focusActive || selected ? 1 : 0.72;
+      o.presence += (presenceTarget - o.presence) * (1 - Math.exp(-dt * 3));
+      // The "settle" factor scales background motion down when focus is active.
+      const settle = 0.55 + 0.45 * o.presence;
+
+      // --- Eased focus / candidate glows (smooth ramps the renderer can read).
+      o.selectGlow += ((selected ? 1 : 0) - o.selectGlow) * (1 - Math.exp(-dt * 4));
+      const mergeTarget = isMerge ? 1 : 0;
+      // mergeGlow also carries the birth flush from reconcile (starts at 1), so
+      // only ramp UP toward a merge target; otherwise let it decay smoothly.
+      if (mergeTarget > o.mergeGlow) {
+        o.mergeGlow += (mergeTarget - o.mergeGlow) * (1 - Math.exp(-dt * 6));
+      } else {
+        o.mergeGlow *= Math.exp(-dt * 2.2);
+      }
 
       // --- Decay transient states (per second).
       const decay = Math.exp(-dt * (selected ? 2.6 : 1.4));
@@ -332,16 +374,24 @@ export class Simulation {
         0.012 *
         m.wander *
         o.restlessness;
-      o.wanderTurnVel = o.wanderTurnVel * 0.92 + wanderForce * dt * 60;
+      // Frame-rate independent damping: a small per-second leak on the turn
+      // velocity, so the S-curves read identically at 30 and 144 Hz.
+      o.wanderTurnVel =
+        o.wanderTurnVel * Math.exp(-dt * 5) + wanderForce * dt * 60;
       o.wanderTurnVel = clamp(o.wanderTurnVel, -0.05, 0.05);
-      o.wanderAngle += o.wanderTurnVel * tempo * composure * dt;
+      o.wanderAngle += o.wanderTurnVel * tempo * composure * settle * dt;
 
       // Smoothed contraction state for the renderer (0 relaxed .. 1 squeezed).
       const targetContract = clamp(Math.sin(o.pulsePhase) * 0.5 + 0.5, 0, 1);
-      o.contraction += (targetContract - o.contraction) * 0.3;
+      o.contraction += (targetContract - o.contraction) * (1 - Math.exp(-dt * 18));
 
       if (o.idea.id === draggedId) {
         // Dragged creatures are positioned by the pointer; still pulse visually.
+        // Light up when hovering a viable merge partner so the user sees the
+        // pairing arm before they release.
+        const dragResonance = mergeCandidateId ? 1 : 0;
+        o.resonance += (dragResonance - o.resonance) * (1 - Math.exp(-dt * 4));
+        o.excitement += (0.4 - o.excitement) * (1 - Math.exp(-dt * 2));
         continue;
       }
 
@@ -400,16 +450,22 @@ export class Simulation {
       }
 
       // Cohesion / social awareness: high-synergy ideas co-drift with kin.
+      // Also accumulate a "resonance" signal — a soft glow shared when synergy
+      // kin swim close — which the renderer reads as bioluminescent attraction.
+      let resonanceTarget = 0;
       if (o.synergyFactor > 0.05 && o.idea.adjacentNodes.length) {
         let cx = 0;
         let cy = 0;
         let n = 0;
+        let closest = Infinity;
         for (const id of o.idea.adjacentNodes) {
           const t = this.byId.get(id);
           if (!t) continue;
           cx += t.x;
           cy += t.y;
           n++;
+          const kd = distance(o.x, o.y, t.x, t.y);
+          if (kd < closest) closest = kd;
         }
         if (n > 0) {
           cx /= n;
@@ -418,6 +474,11 @@ export class Simulation {
           if (d > 120) {
             dx += ((cx - o.x) / d) * 0.9 * o.synergyFactor;
             dy += ((cy - o.y) / d) * 0.9 * o.synergyFactor;
+          }
+          // Glow when a synergy partner is within ~bioluminescent range.
+          const reach = 220;
+          if (closest < reach) {
+            resonanceTarget = clamp(1 - closest / reach, 0, 1) * o.synergyFactor;
           }
         }
       }
@@ -440,21 +501,30 @@ export class Simulation {
       else if (o.y > this.height - lookahead)
         dy -= (1 - (this.height - o.y) / lookahead) * 0.7;
 
-      // Merge resonance: the candidate is gently drawn toward its suitor.
-      if (o.idea.id === mergeCandidateId && dragged) {
+      // Merge resonance: the candidate is gently drawn toward its suitor and
+      // lights up — a clear, escalating "these two want to fuse" signal.
+      if (isMerge && dragged) {
         const d = distance(o.x, o.y, dragged.x, dragged.y) || 1;
         dx += ((dragged.x - o.x) / d) * 1.6;
         dy += ((dragged.y - o.y) / d) * 1.6;
-        // Sync the pulse so the pair breathes together.
-        o.pulsePhase = lerpAngle(o.pulsePhase, dragged.pulsePhase, 0.04);
+        // Sync the pulse so the pair breathes together (frame-rate independent).
+        o.pulsePhase = lerpAngle(
+          o.pulsePhase,
+          dragged.pulsePhase,
+          1 - Math.exp(-dt * 2.4),
+        );
+        resonanceTarget = 1;
       }
+
+      // Ease resonance toward its target (glow ramps up/decays smoothly).
+      o.resonance += (resonanceTarget - o.resonance) * (1 - Math.exp(-dt * 4));
 
       // --- Startle / dart: a rare stochastic twitch in the heading direction,
       // plus a reflexive veer when another body crowds in very close.
       const crowded = nearestGap < o.radius * 0.9;
       if (!selected && o.startleCooldown <= 0) {
         const p =
-          STARTLE_RATE[o.archetype] * o.restlessness * tempo * dt +
+          STARTLE_RATE[o.archetype] * o.restlessness * tempo * settle * dt +
           (crowded ? 0.12 * dt * 60 : 0);
         // Deterministic-ish stochastic trigger from the noise field + phase.
         const r =
@@ -498,6 +568,8 @@ export class Simulation {
         (selected ? -0.25 : 0) +
         (atStation ? 0 : 0.1);
       thrust *= clamp(idle + o.excitement * 0.6, 0.3, 1.3);
+      // Background creatures ease their thrust while another holds focus.
+      thrust *= settle;
       o.vx += Math.cos(o.heading) * thrust;
       o.vy += Math.sin(o.heading) * thrust;
 
@@ -520,9 +592,12 @@ export class Simulation {
       o.vy += current * tempo;
       o.vx += fbm1D(o.y * 0.002 + ct * 0.06 + 200, 2) * 0.012 * tempo;
 
-      // Fluid drag — heavier for lazy bodies, lighter for darters.
-      o.vx *= o.drag;
-      o.vy *= o.drag;
+      // Fluid drag — heavier for lazy bodies, lighter for darters. Raised to the
+      // power of dt so damping is identical regardless of frame rate (the drag
+      // constants are authored per nominal 60 Hz frame, dt = 1).
+      const damp = Math.pow(o.drag, dt);
+      o.vx *= damp;
+      o.vy *= damp;
 
       // Speed envelope from momentum + tempo (a startle dart raises the ceiling).
       const maxSpeed =
@@ -537,6 +612,21 @@ export class Simulation {
       o.y += o.vy * dt;
 
       this.containSoft(o);
+
+      // Final NaN/Infinity firewall: if any term ever degenerates, reset this
+      // creature to a sane resting state rather than letting it vanish or pin a
+      // corner. Cheap insurance against extreme dt or pathological noise.
+      if (!Number.isFinite(o.x) || !Number.isFinite(o.y)) {
+        o.x = clamp(Number.isFinite(o.x) ? o.x : this.width * 0.5, 20, this.width - 20);
+        o.y = clamp(Number.isFinite(o.y) ? o.y : this.height * 0.5, 20, this.height - 20);
+        o.vx = 0;
+        o.vy = 0;
+      }
+      if (!Number.isFinite(o.vx) || !Number.isFinite(o.vy)) {
+        o.vx = 0;
+        o.vy = 0;
+      }
+      if (!Number.isFinite(o.heading)) o.heading = 0;
     }
   }
 
@@ -551,12 +641,27 @@ export class Simulation {
     o.y = clamp(o.y, 8, this.height - 8);
   }
 
-  /** Topmost organism under a point, or null. */
+  /**
+   * Organism under a point, or null. Hit area is forgiving (radius + padding);
+   * among overlapping candidates the one whose centre is closest to the pointer
+   * wins, so clicks/drags feel like they grab what's under the cursor rather
+   * than whatever happens to be last in the array.
+   */
   hitTest(px: number, py: number): Organism | null {
     let found: Organism | null = null;
+    let bestScore = Infinity;
     for (const o of this.organisms) {
-      const r = o.radius + 10;
-      if (distance(px, py, o.x, o.y) <= r) found = o;
+      const r = o.radius + 12;
+      const d = distance(px, py, o.x, o.y);
+      if (d <= r) {
+        // Normalised penetration: 0 at the centre, 1 at the rim. Closest to
+        // centre (smallest score) wins; ties broken toward smaller bodies.
+        const score = d / r;
+        if (score < bestScore) {
+          bestScore = score;
+          found = o;
+        }
+      }
     }
     return found;
   }

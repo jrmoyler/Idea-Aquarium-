@@ -79,39 +79,72 @@ function rand(min: number, max: number): number {
   return Math.round(min + Math.random() * (max - min));
 }
 
+/** Pull `count` distinct random items from a pool without mutating it. */
+function sample<T>(pool: T[], count: number): T[] {
+  const copy = pool.slice();
+  const out: T[] = [];
+  while (out.length < count && copy.length) {
+    out.push(copy.splice(Math.floor(Math.random() * copy.length), 1)[0]);
+  }
+  return out;
+}
+
+/**
+ * Each species has a loose temperament so spawned traits feel coherent rather
+ * than uniformly random — a Catalyst should read scrappy and high-momentum, a
+ * Lattice methodical and complex, etc. Values are soft centres, not hard rules.
+ */
+const SPECIES_BIAS: Record<
+  Species,
+  Partial<Record<"synergy" | "revenue" | "joy" | "complexity" | "novelty" | "momentum", number>>
+> = {
+  Synthesizer: { synergy: 12, novelty: 8 },
+  Conduit: { synergy: 16, revenue: 8, momentum: 6 },
+  Lattice: { complexity: 16, synergy: 8, momentum: -6 },
+  Drifter: { joy: 12, novelty: 10, revenue: -8, momentum: -8 },
+  Catalyst: { momentum: 16, joy: 8, complexity: -10, novelty: 6 },
+  Sentinel: { revenue: 12, complexity: 8, joy: -6 },
+  Weaver: { synergy: 14, joy: 6, novelty: 6 },
+};
+
 /** Generate a fresh, non-placeholder idea for the Spawn New Idea action. */
 export function spawnIdea(existing: Idea[]): Idea {
   const name = `${pick(PREFIXES)} ${pick(SUFFIXES)}`;
   const id = `spawn-${name.toLowerCase().replace(/\s+/g, "-")}-${Date.now().toString(36)}`;
+  const species = pick(SPECIES);
+  const bias = SPECIES_BIAS[species];
 
-  const tags = Array.from(
-    new Set([pick(TAG_POOL), pick(TAG_POOL), pick(TAG_POOL)]),
-  );
+  // 2–3 distinct, on-theme tags.
+  const tags = sample(TAG_POOL, rand(2, 3));
 
-  // Attach to a couple of existing high-synergy nodes so it joins the web.
-  const adjacentNodes = existing
-    .slice()
-    .sort((a, b) => b.synergy - a.synergy)
-    .slice(0, 6)
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 2)
-    .map((i) => i.id);
+  // Attach to a couple of existing high-synergy nodes so it joins the web and
+  // immediately has kin to school with. Falls back gracefully on an empty tank.
+  const adjacentNodes = sample(
+    existing
+      .slice()
+      .sort((a, b) => b.synergy - a.synergy)
+      .slice(0, 6),
+    Math.min(2, existing.length),
+  ).map((i) => i.id);
 
-  const mutationIdeas = MUTATIONS.slice()
-    .sort(() => Math.random() - 0.5)
-    .slice(0, 3);
+  const mutationIdeas = sample(MUTATIONS, 3);
+
+  // Apply species temperament to softly-bounded random traits, then clamp.
+  const t = (base: number, key: keyof typeof bias) =>
+    Math.max(20, Math.min(98, base + (bias[key] ?? 0)));
 
   return {
     id,
     name,
-    species: pick(SPECIES),
+    species,
     description: pick(DESCRIPTORS),
-    synergy: rand(35, 90),
-    revenue: rand(30, 88),
-    joy: rand(40, 95),
-    complexity: rand(30, 85),
-    novelty: rand(45, 95),
-    momentum: rand(55, 95),
+    synergy: t(rand(40, 86), "synergy"),
+    revenue: t(rand(34, 82), "revenue"),
+    joy: t(rand(45, 92), "joy"),
+    complexity: t(rand(32, 80), "complexity"),
+    novelty: t(rand(48, 92), "novelty"),
+    // Fresh ideas arrive with energy — they enter the tank lively.
+    momentum: t(rand(60, 94), "momentum"),
     status: "incubating",
     tags,
     adjacentNodes,
