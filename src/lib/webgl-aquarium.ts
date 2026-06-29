@@ -627,10 +627,8 @@ export class WebGLAquariumRenderer {
         return new THREE.IcosahedronGeometry(0.7, 0);
       case 3:
         return new THREE.CylinderGeometry(0.34, 0.64, 1.1, 7, 1, true);
-      default: {
-        const _never: never = variant;
-        return _never;
-      }
+      default:
+        return new THREE.TorusGeometry(0.8, 0.1, 14, 48);
     }
   }
 
