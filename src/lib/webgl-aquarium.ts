@@ -16,6 +16,7 @@ interface AquariumRenderState {
 
 interface CreatureVisual {
   group: THREE.Group;
+  silhouette: THREE.Mesh<THREE.CircleGeometry, THREE.MeshBasicMaterial>;
   body: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   accent: THREE.Mesh<THREE.BufferGeometry, THREE.MeshStandardMaterial>;
   aura: THREE.Mesh<THREE.RingGeometry, THREE.MeshBasicMaterial>;
@@ -45,6 +46,7 @@ interface BubbleState {
 const FLOOR_HEIGHT = 84;
 const BUBBLE_COUNT = 120;
 const PLANT_COUNT = 20;
+const PLANT_STEM_HEIGHT = 124;
 
 export class WebGLAquariumRenderer {
   private readonly scene = new THREE.Scene();
@@ -303,9 +305,11 @@ export class WebGLAquariumRenderer {
         metalness: 0.02,
       });
       const stem = new THREE.Mesh(
-        new THREE.CylinderGeometry(3, 7, 120, 9),
+        new THREE.CylinderGeometry(3.4, 7.5, PLANT_STEM_HEIGHT, 9),
         stemMaterial,
       );
+      // Anchor plants at their base so they always grow upward from the floor.
+      stem.position.y = PLANT_STEM_HEIGHT * 0.5;
       stem.castShadow = true;
       group.add(stem);
 
@@ -325,10 +329,11 @@ export class WebGLAquariumRenderer {
           }),
         );
         const f = (leaf + 1) / (leafCount + 1);
-        leafMesh.position.y = -48 + f * 105;
+        leafMesh.position.y = 12 + f * (PLANT_STEM_HEIGHT - 16);
         leafMesh.position.x = (leaf % 2 === 0 ? 1 : -1) * (16 + rng() * 8);
         leafMesh.rotation.y = leaf % 2 === 0 ? -0.6 : 0.6;
-        leafMesh.rotation.z = (leaf % 2 === 0 ? -1 : 1) * (0.3 + rng() * 0.2);
+        leafMesh.rotation.z = (leaf % 2 === 0 ? 1 : -1) * (0.28 + rng() * 0.2);
+        leafMesh.rotation.x = 0.12 + rng() * 0.25;
         group.add(leafMesh);
       }
 
@@ -350,10 +355,10 @@ export class WebGLAquariumRenderer {
       const edgePush = i % 2 === 0 ? 0.12 : -0.12;
       const centered = plant.anchor + edgePush;
       const x = (centered - 0.5) * this.width;
-      const y = -this.height / 2 + FLOOR_HEIGHT * 0.46;
+      const y = -this.height / 2 + FLOOR_HEIGHT * 0.1;
       plant.group.position.set(x, y, -110 + (i % 5) * 6);
       const scale = plant.heightFactor * (this.height / 780);
-      plant.group.scale.set(1, scale, 1);
+      plant.group.scale.setScalar(scale);
     }
   }
 
@@ -432,6 +437,19 @@ export class WebGLAquariumRenderer {
     const baseColor = new THREE.Color(organism.baseColor);
     baseColor.offsetHSL((rng() - 0.5) * 0.22, 0.2 + rng() * 0.25, rng() * 0.12);
 
+    const silhouette = new THREE.Mesh(
+      new THREE.CircleGeometry(1.5, 40),
+      new THREE.MeshBasicMaterial({
+        color: "#113d57",
+        transparent: true,
+        opacity: 0.28,
+        depthWrite: false,
+      }),
+    );
+    silhouette.position.z = -0.85;
+    silhouette.renderOrder = 1;
+    group.add(silhouette);
+
     const bodyGeometry = this.createBodyGeometry(organism.archetype, rng);
     const bodyMaterial = new THREE.MeshStandardMaterial({
       color: baseColor,
@@ -441,9 +459,11 @@ export class WebGLAquariumRenderer {
       metalness: 0.06 + rng() * 0.12,
       transparent: true,
       opacity: 0.94,
+      depthWrite: false,
       flatShading: rng() > 0.6,
     });
     const body = new THREE.Mesh(bodyGeometry, bodyMaterial);
+    body.renderOrder = 3;
     body.castShadow = true;
     body.receiveShadow = true;
     group.add(body);
@@ -457,9 +477,11 @@ export class WebGLAquariumRenderer {
       metalness: 0.18,
       transparent: true,
       opacity: 0.72,
+      depthWrite: false,
     });
     const accent = new THREE.Mesh(this.createAccentGeometry(rng), accentMaterial);
     accent.scale.setScalar(0.85 + rng() * 0.55);
+    accent.renderOrder = 4;
     accent.castShadow = true;
     group.add(accent);
 
@@ -479,6 +501,7 @@ export class WebGLAquariumRenderer {
           metalness: 0.1,
           transparent: true,
           opacity: 0.75,
+          depthWrite: false,
         }),
       );
       const angle = (i / appendageCount) * Math.PI * 2 + rng() * 0.4;
@@ -497,9 +520,11 @@ export class WebGLAquariumRenderer {
         opacity: 0,
         side: THREE.DoubleSide,
         depthWrite: false,
+        depthTest: false,
       }),
     );
     aura.position.z = -0.55;
+    aura.renderOrder = 2;
     group.add(aura);
 
     if (rng() > 0.4) {
@@ -523,6 +548,7 @@ export class WebGLAquariumRenderer {
 
     return {
       group,
+      silhouette,
       body,
       accent,
       aura,
@@ -577,6 +603,8 @@ export class WebGLAquariumRenderer {
     );
     visual.group.scale.setScalar(scale * (1 + emphasis * 0.18));
 
+    visual.silhouette.material.opacity = dimmed ? 0.06 : 0.18 + emphasis * 0.2;
+    visual.silhouette.scale.setScalar(1.05 + emphasis * 0.22 + organism.hover * 0.14);
     visual.body.material.emissiveIntensity = brightness;
     visual.body.material.opacity = dimmed ? 0.22 : 0.94;
     visual.body.material.roughness = clamp(0.25 + (1 - organism.idea.joy / 100) * 0.55, 0.2, 0.95);
@@ -636,8 +664,10 @@ export class WebGLAquariumRenderer {
     try {
       const gltf = await this.gltfLoader.loadAsync("/assets/blender/plants.glb");
       const group = gltf.scene;
-      group.position.set(0, -this.height / 2 + FLOOR_HEIGHT * 0.58, -170);
-      group.scale.set(95, 95, 95);
+      group.position.set(0, -this.height / 2 + FLOOR_HEIGHT * 0.1, -220);
+      group.scale.set(76, 76, 76);
+      // Some exports arrive in an upside-down orientation; normalize to upright.
+      group.rotation.x = Math.PI;
       group.traverse((obj) => {
         if (!(obj instanceof THREE.Mesh)) return;
         obj.castShadow = true;

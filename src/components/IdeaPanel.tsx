@@ -65,7 +65,7 @@ function TraitBar({
   return (
     <div className="flex flex-col gap-2">
       <div className="flex items-baseline justify-between">
-        <span className="text-[13px] font-medium text-slate-200">{label}</span>
+        <span className="text-[13px] font-medium text-slate-700">{label}</span>
         <span className="flex items-baseline gap-2.5">
           <span className="text-[10px] uppercase tracking-wider text-slate-mute">
             {traitLabel(value)}
@@ -137,7 +137,7 @@ function WelcomeState({
     { label: "Avg Synergy", value: ecosystem.avgSynergy, accent: "text-teal" },
     { label: "Avg Momentum", value: ecosystem.avgMomentum, accent: "text-teal" },
     { label: "Build Queue", value: ecosystem.promoted, accent: "text-teal" },
-    { label: "Dormant", value: ecosystem.dormant, accent: "text-slate-200" },
+    { label: "Dormant", value: ecosystem.dormant, accent: "text-slate-700" },
     { label: "Top Species", value: ecosystem.topSpecies, accent: "text-amber" },
   ];
   return (
@@ -153,7 +153,7 @@ function WelcomeState({
 
       <div className="flex-1">
         <SectionTitle>Intelligence Feed</SectionTitle>
-        <h2 className="font-grotesk text-[26px] font-semibold leading-[1.15] tracking-tight text-slate-50 text-balance">
+        <h2 className="font-grotesk text-[26px] font-semibold leading-[1.15] tracking-tight text-slate-900 text-balance">
           The habitat is alive.
         </h2>
         <p className="mt-3.5 text-[13px] leading-relaxed text-slate-ink">
@@ -232,7 +232,7 @@ function HybridCard({
           type="button"
           onClick={onDismiss}
           whileTap={{ scale: 0.9 }}
-          className="focus-ring -mr-1 -mt-1 rounded-full p-1.5 text-slate-mute transition-colors hover:text-slate-100"
+          className="focus-ring -mr-1 -mt-1 rounded-full p-1.5 text-slate-mute transition-colors hover:text-slate-800"
           aria-label="Dismiss hybrid"
         >
           <svg
@@ -317,7 +317,7 @@ function DossierState({
           </p>
           <StatusBadge status={idea.status} />
         </div>
-        <h2 className="mt-2.5 font-grotesk text-[26px] font-semibold leading-[1.1] tracking-tight text-slate-50">
+        <h2 className="mt-2.5 font-grotesk text-[26px] font-semibold leading-[1.1] tracking-tight text-slate-900">
           {idea.name}
         </h2>
         <p className="mt-3.5 text-[13px] leading-relaxed text-slate-ink">
@@ -363,7 +363,7 @@ function DossierState({
               <div className="flex items-center gap-3">
                 <span className="h-7 w-7 rounded-full border border-teal/30 bg-teal/5" />
                 <div>
-                  <p className="font-grotesk text-sm font-medium text-slate-100">
+                  <p className="font-grotesk text-sm font-medium text-slate-800">
                     {best.name}
                   </p>
                   <p className="text-[11px] text-slate-mute">{best.species}</p>
