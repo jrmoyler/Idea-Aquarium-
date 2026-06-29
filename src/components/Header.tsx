@@ -36,7 +36,7 @@ function ModeToggle({
 }) {
   const modes: ViewMode[] = ["calm", "active"];
   return (
-    <div className="relative flex items-center rounded-full border border-slate-line/60 bg-navy-900/50 p-1">
+    <div className="relative flex items-center rounded-full border border-cyan-200/80 bg-white/90 p-1 shadow-[0_10px_24px_-16px_rgba(14,116,144,0.6)]">
       {modes.map((m) => {
         const active = mode === m;
         return (
@@ -50,12 +50,12 @@ function ModeToggle({
               <motion.span
                 layoutId="mode-pill"
                 transition={{ type: "spring", stiffness: 360, damping: 30 }}
-                className="absolute inset-0 -z-10 rounded-full border border-teal/40 bg-teal/10 shadow-[0_0_18px_-8px_rgba(0,217,181,0.8)]"
+              className="absolute inset-0 -z-10 rounded-full border border-cyan-400/50 bg-cyan-200/60 shadow-[0_0_18px_-8px_rgba(6,182,212,0.75)]"
               />
             )}
             <span
               className={
-                active ? "text-teal" : "text-slate-mute transition-colors hover:text-slate-300"
+                active ? "text-cyan-700" : "text-slate-500 transition-colors hover:text-cyan-700"
               }
             >
               {m}
@@ -79,9 +79,9 @@ export function Header({
   metrics,
 }: HeaderProps) {
   return (
-    <header className="relative z-20 flex flex-col gap-4 border-b border-slate-line/50 bg-navy-950/80 px-7 py-4 backdrop-blur-xl">
+    <header className="relative z-20 flex flex-col gap-4 border-b border-white/70 bg-white/75 px-7 py-4 backdrop-blur-xl">
       {/* Faint separating glow below the chrome. */}
-      <div className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-teal/15 to-transparent" />
+      <div className="pointer-events-none absolute inset-x-0 -bottom-px h-px bg-gradient-to-r from-transparent via-cyan-400/35 to-transparent" />
 
       <div className="flex flex-wrap items-center justify-between gap-4">
         {/* Identity */}
@@ -92,10 +92,10 @@ export function Header({
             <span className="h-1.5 w-1.5 rounded-full bg-teal shadow-[0_0_12px_2px_rgba(0,217,181,0.7)] animate-pulse-soft" />
           </div>
           <div className="leading-tight">
-            <h1 className="font-grotesk text-[19px] font-semibold tracking-tight text-slate-50">
+            <h1 className="font-grotesk text-[19px] font-semibold tracking-tight text-slate-900">
               Idea Aquarium
             </h1>
-            <p className="text-xs tracking-wide text-slate-mute">
+            <p className="text-xs tracking-wide text-slate-600">
               A living habitat for venture concepts
             </p>
           </div>
@@ -118,7 +118,7 @@ export function Header({
               value={query}
               onChange={(e) => onQueryChange(e.target.value)}
               placeholder="Search the ecosystem…"
-              className="w-full rounded-full border border-slate-line/60 bg-navy-900/50 py-2 pl-10 pr-3 text-sm text-slate-100 outline-none transition-colors duration-300 placeholder:text-slate-mute focus:border-teal/40 focus:bg-navy-900/70"
+              className="w-full rounded-full border border-cyan-200/80 bg-white/85 py-2 pl-10 pr-3 text-sm text-slate-800 outline-none transition-colors duration-300 placeholder:text-slate-500 focus:border-cyan-400 focus:bg-white"
             />
           </div>
 

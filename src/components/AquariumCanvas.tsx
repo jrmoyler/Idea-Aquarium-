@@ -1,27 +1,8 @@
 import { useEffect, useRef } from "react";
 import type { Idea, ViewMode } from "../types";
-import { Organism, Simulation } from "../lib/simulation";
-import { drawOrganism } from "../lib/organisms";
-import { PALETTE, rgba } from "../lib/color";
+import { Simulation, type Organism } from "../lib/simulation";
+import { WebGLAquariumRenderer } from "../lib/webgl-aquarium";
 import { clamp, distance } from "../lib/utils";
-import {
-  buildLightShafts,
-  buildBubbleVents,
-  buildSediment,
-  buildKelp,
-  paintLightShafts,
-  paintCaustics,
-  paintThermocline,
-  updateAndPaintBubbles,
-  paintSeaFloor,
-  paintKelp,
-  paintMurk,
-  type LightShaft,
-  type Bubble,
-  type BubbleVent,
-  type Sediment,
-  type KelpStrand,
-} from "../lib/environment";
 
 interface AquariumCanvasProps {
   ideas: Idea[];
@@ -35,15 +16,6 @@ interface AquariumCanvasProps {
 
 const MERGE_RANGE = 92;
 const DRAG_THRESHOLD = 5;
-
-/** Suspended marine snow — drifting particulate, not orbiting decoration. */
-interface Mote {
-  x: number;
-  y: number;
-  z: number; // depth 0..1 -> size & speed
-  drift: number;
-  warm: boolean;
-}
 
 export function AquariumCanvas({
   ideas,
@@ -73,12 +45,7 @@ export function AquariumCanvas({
     downY: number;
   } | null>(null);
   const mergeCandidateRef = useRef<Organism | null>(null);
-  const motesRef = useRef<Mote[]>([]);
-  const shaftsRef = useRef<LightShaft[]>([]);
-  const bubblesRef = useRef<Bubble[]>([]);
-  const ventsRef = useRef<BubbleVent[]>([]);
-  const sedimentRef = useRef<Sediment[]>([]);
-  const kelpRef = useRef<KelpStrand[]>([]);
+  const rendererRef = useRef<WebGLAquariumRenderer | null>(null);
 
   useEffect(() => {
     selectedRef.current = selectedId;
@@ -106,8 +73,6 @@ export function AquariumCanvas({
     const container = containerRef.current;
     const canvas = canvasRef.current;
     if (!container || !canvas) return;
-    const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
     let width = container.clientWidth;
     let height = container.clientHeight;
@@ -121,7 +86,7 @@ export function AquariumCanvas({
       canvas.height = Math.floor(height * dpr);
       canvas.style.width = `${width}px`;
       canvas.style.height = `${height}px`;
-      ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
+      rendererRef.current?.resize(width, height, dpr);
     };
     applySize();
 
@@ -132,23 +97,12 @@ export function AquariumCanvas({
     }
     const sim = simRef.current;
 
-    if (motesRef.current.length === 0) {
-      const count = 84;
-      motesRef.current = Array.from({ length: count }, (_, i) => ({
-        x: Math.random() * width,
-        y: Math.random() * height,
-        z: Math.random(),
-        drift: Math.random() * Math.PI * 2,
-        warm: i % 9 === 0,
-      }));
+    if (!rendererRef.current) {
+      rendererRef.current = new WebGLAquariumRenderer(canvas, width, height);
+    } else {
+      rendererRef.current.resize(width, height, dpr);
     }
-
-    // Precompute static atmosphere structures once (resolution-independent —
-    // they store fractional positions, so they survive resize untouched).
-    if (shaftsRef.current.length === 0) shaftsRef.current = buildLightShafts();
-    if (ventsRef.current.length === 0) ventsRef.current = buildBubbleVents();
-    if (sedimentRef.current.length === 0) sedimentRef.current = buildSediment();
-    if (kelpRef.current.length === 0) kelpRef.current = buildKelp();
+    const renderer = rendererRef.current;
 
     const ro = new ResizeObserver(() => {
       applySize();
@@ -240,31 +194,15 @@ export function AquariumCanvas({
       const dragged = dragRef.current?.org.idea.id ?? null;
       const mergeId = mergeCandidateRef.current?.idea.id ?? null;
       sim.step(dt, selectedRef.current, dragged, mergeId);
-
-      draw(
-        ctx,
-        sim,
-        {
-          width,
-          height,
-          dt,
-          now,
-          selectedId: selectedRef.current,
-          hoverId: hoverIdRef.current,
-          mergeCandidate: mergeCandidateRef.current,
-          draggedId: dragged,
-          matching: matchingRef.current,
-          filtersActive: filtersActiveRef.current,
-        },
-        {
-          motes: motesRef.current,
-          shafts: shaftsRef.current,
-          bubbles: bubblesRef.current,
-          vents: ventsRef.current,
-          sediment: sedimentRef.current,
-          kelp: kelpRef.current,
-        },
-      );
+      renderer.render(sim.organisms, {
+        now,
+        selectedId: selectedRef.current,
+        hoverId: hoverIdRef.current,
+        mergeCandidateId: mergeId,
+        draggedId: dragged,
+        matching: matchingRef.current,
+        filtersActive: filtersActiveRef.current,
+      });
 
       raf = requestAnimationFrame(frame);
     };
@@ -277,6 +215,8 @@ export function AquariumCanvas({
       canvas.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       canvas.removeEventListener("pointerleave", onPointerLeave);
+      renderer.dispose();
+      rendererRef.current = null;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -286,298 +226,4 @@ export function AquariumCanvas({
       <canvas ref={canvasRef} className="block h-full w-full drag-none" />
     </div>
   );
-}
-
-// ---------------------------------------------------------------------------
-// Scene composition (atmosphere + creatures). The creatures themselves are
-// drawn entirely by the biological renderer in lib/organisms.ts.
-// ---------------------------------------------------------------------------
-
-interface DrawState {
-  width: number;
-  height: number;
-  dt: number;
-  now: number;
-  selectedId: string | null;
-  hoverId: string | null;
-  mergeCandidate: Organism | null;
-  draggedId: string | null;
-  matching: Set<string>;
-  filtersActive: boolean;
-}
-
-interface SceneLayers {
-  motes: Mote[];
-  shafts: LightShaft[];
-  bubbles: Bubble[];
-  vents: BubbleVent[];
-  sediment: Sediment[];
-  kelp: KelpStrand[];
-}
-
-function draw(
-  ctx: CanvasRenderingContext2D,
-  sim: Simulation,
-  s: DrawState,
-  layers: SceneLayers,
-) {
-  const { width, height, now } = s;
-
-  ctx.clearRect(0, 0, width, height);
-
-  // --- Environment: behind the creatures ---------------------------------
-  // Deep water column, then descending light, refracted caustics, drifting
-  // thermocline haze, the sea bed and its swaying flora, finally suspended
-  // particulate. This builds the world the creatures swim through.
-  paintBackground(ctx, width, height, now);
-  paintLightShafts(ctx, layers.shafts, width, height, now);
-  paintCaustics(ctx, width, height, now);
-  paintThermocline(ctx, width, height, now);
-  paintSeaFloor(ctx, layers.sediment, width, height, now);
-  paintKelp(ctx, layers.kelp, width, height, now);
-  updateAndPaintBubbles(ctx, layers.bubbles, layers.vents, width, height, now, s.dt);
-  paintMarineSnow(ctx, layers.motes, width, height, s.dt);
-
-  const anySelected = s.selectedId !== null;
-
-  // Ease transient render states toward targets — slow easing keeps the
-  // ecosystem composed and lifelike.
-  for (const o of sim.organisms) {
-    const isHover = o.idea.id === s.hoverId;
-    const isSelected = o.idea.id === s.selectedId;
-    o.hover += ((isHover ? 1 : 0) - o.hover) * 0.12;
-    o.selectGlow += ((isSelected ? 1 : 0) - o.selectGlow) * 0.08;
-
-    // Spotlight: when one creature holds focus, the rest gently recede.
-    const focused = isSelected || isHover || o.idea.id === s.draggedId;
-    const target = !anySelected || focused ? 1 : 0.34;
-    o.presence += (target - o.presence) * 0.06;
-
-    // Merge resonance: the candidate and its suitor brighten together — a
-    // shared bioluminescent attraction, never a drawn connector.
-    const inResonance =
-      o === s.mergeCandidate ||
-      (s.draggedId === o.idea.id && s.mergeCandidate !== null);
-    o.resonance += ((inResonance ? 1 : 0) - o.resonance) * 0.12;
-
-    // Birth flush fades naturally.
-    if (o.mergeGlow > 0) {
-      o.mergeGlow *= 0.94;
-      if (o.mergeGlow < 0.01) o.mergeGlow = 0;
-    }
-  }
-
-  // Draw recessed creatures first, focused ones last (on top).
-  const ordered = [...sim.organisms].sort((a, b) => {
-    const av = a.idea.id === s.selectedId ? 2 : a.hover;
-    const bv = b.idea.id === s.selectedId ? 2 : b.hover;
-    return av - bv;
-  });
-
-  for (const o of ordered) {
-    const dimmed =
-      s.filtersActive && s.matching.size > 0 && !s.matching.has(o.idea.id);
-    drawOrganism(ctx, o, { now, dt: s.dt, dimmed });
-  }
-
-  // Soft labels over focused/hovered creatures.
-  for (const o of sim.organisms) {
-    const a = Math.max(o.hover, o.selectGlow);
-    const dimmed =
-      s.filtersActive && s.matching.size > 0 && !s.matching.has(o.idea.id);
-    if (a > 0.05 && !dimmed) drawLabel(ctx, o, a);
-  }
-
-  // Foreground depth-of-field murk drifts in front of the scene so the water
-  // reads as thick — then the vignette frames everything.
-  paintMurk(ctx, width, height, now);
-  paintVignette(ctx, width, height);
-}
-
-function paintBackground(
-  ctx: CanvasRenderingContext2D,
-  w: number,
-  h: number,
-  now: number,
-) {
-  // Deep water column: cooler/brighter near the surface, falling off into
-  // near-black at depth — the eye reads it as looking down into deep water.
-  const base = ctx.createLinearGradient(0, 0, 0, h);
-  base.addColorStop(0, "#0A1428");
-  base.addColorStop(0.18, "#081020");
-  base.addColorStop(0.5, "#050A18");
-  base.addColorStop(0.78, "#030610");
-  base.addColorStop(1, "#01030A");
-  ctx.fillStyle = base;
-  ctx.fillRect(0, 0, w, h);
-
-  ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-
-  const breath = 0.5 + 0.5 * Math.sin(now * 0.00035);
-  const topGlow = ctx.createRadialGradient(
-    w * 0.5,
-    -h * 0.32,
-    0,
-    w * 0.5,
-    -h * 0.32,
-    h * 1.25,
-  );
-  topGlow.addColorStop(0, rgba(PALETTE.teal, 0.07 + breath * 0.03));
-  topGlow.addColorStop(0.5, rgba(PALETTE.teal, 0.018));
-  topGlow.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = topGlow;
-  ctx.fillRect(0, 0, w, h);
-
-  const floorGlow = ctx.createRadialGradient(
-    w * 0.5,
-    h * 1.2,
-    0,
-    w * 0.5,
-    h * 1.2,
-    h * 0.95,
-  );
-  floorGlow.addColorStop(0, rgba(PALETTE.amber, 0.045));
-  floorGlow.addColorStop(1, "rgba(0,0,0,0)");
-  ctx.fillStyle = floorGlow;
-  ctx.fillRect(0, 0, w, h);
-
-  // Two slow diffuse currents add depth without reading as bands.
-  for (let i = 0; i < 2; i++) {
-    const cx = w * (0.32 + i * 0.4) + Math.sin(now * 0.0002 + i * 2) * w * 0.08;
-    const cy = h * (0.35 + i * 0.32);
-    const rad = Math.max(w, h) * 0.5;
-    const sweep = ctx.createRadialGradient(cx, cy, 0, cx, cy, rad);
-    sweep.addColorStop(0, rgba(PALETTE.teal, 0.016));
-    sweep.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = sweep;
-    ctx.fillRect(0, 0, w, h);
-  }
-  ctx.restore();
-}
-
-function paintMarineSnow(
-  ctx: CanvasRenderingContext2D,
-  motes: Mote[],
-  w: number,
-  h: number,
-  dt: number,
-) {
-  ctx.save();
-  ctx.globalCompositeOperation = "lighter";
-  for (const p of motes) {
-    // Parallax: near motes (high z) are larger, drift faster, and sink/rise
-    // more; far motes barely move, giving a sense of a deep water column.
-    p.drift += (0.004 + p.z * 0.005) * dt;
-    p.y -= (0.012 + p.z * 0.11) * dt;
-    p.x += Math.sin(p.drift) * (0.04 + p.z * 0.09) * dt;
-    if (p.y < -4) {
-      p.y = h + 4;
-      p.x = Math.random() * w;
-    }
-    if (p.x < -4) p.x = w + 4;
-    if (p.x > w + 4) p.x = -4;
-    // Size & alpha both scale with depth; a slow shimmer adds life.
-    const shimmer = 0.78 + 0.22 * Math.sin(p.drift * 2.3);
-    const r = 0.35 + p.z * p.z * 1.7;
-    const color = p.warm ? PALETTE.amberGlow : PALETTE.teal;
-    // Soft, blurred particulate (radial fade), not crisp dots.
-    const a = (0.035 + p.z * 0.09) * shimmer;
-    const g = ctx.createRadialGradient(p.x, p.y, 0, p.x, p.y, r * 2.6);
-    g.addColorStop(0, rgba(color, a));
-    g.addColorStop(1, "rgba(0,0,0,0)");
-    ctx.fillStyle = g;
-    ctx.beginPath();
-    ctx.arc(p.x, p.y, r * 2.6, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.restore();
-}
-
-function drawLabel(ctx: CanvasRenderingContext2D, o: Organism, alpha: number) {
-  ctx.save();
-  ctx.globalAlpha = clamp(alpha, 0, 1) * o.presence;
-  ctx.textAlign = "center";
-  ctx.textBaseline = "middle";
-
-  const label = o.idea.name;
-  const kind = o.archetype.toUpperCase();
-  const ty = o.y - o.radius - 26;
-
-  ctx.font = "500 12px 'Space Grotesk', system-ui, sans-serif";
-  const nameW = ctx.measureText(label).width;
-  ctx.font = "500 8px 'Space Grotesk', system-ui, sans-serif";
-  const kindW = ctx.measureText(kind).width * 1.2;
-  const boxW = Math.max(nameW, kindW) + 22;
-  const boxH = 32;
-  const bx = o.x - boxW / 2;
-  const by = ty - boxH / 2;
-
-  // Soft, glowing backing — no crisp stroked ring.
-  ctx.shadowColor = rgba(PALETTE.teal, 0.18 * alpha);
-  ctx.shadowBlur = 14;
-  ctx.fillStyle = rgba("#040A14", 0.72);
-  roundRect(ctx, bx, by, boxW, boxH, 9);
-  ctx.fill();
-  ctx.shadowBlur = 0;
-
-  ctx.fillStyle = "#E6EDF8";
-  ctx.font = "500 12px 'Space Grotesk', system-ui, sans-serif";
-  ctx.fillText(label, o.x, ty - 5);
-
-  ctx.fillStyle = rgba(PALETTE.teal, 0.7);
-  ctx.font = "500 8px 'Space Grotesk', system-ui, sans-serif";
-  drawSpacedText(ctx, kind, o.x, ty + 8, 1.8);
-  ctx.restore();
-}
-
-function drawSpacedText(
-  ctx: CanvasRenderingContext2D,
-  text: string,
-  cx: number,
-  y: number,
-  spacing: number,
-) {
-  const widths = [...text].map((ch) => ctx.measureText(ch).width + spacing);
-  const total = widths.reduce((a, b) => a + b, 0) - spacing;
-  let x = cx - total / 2;
-  ctx.textAlign = "left";
-  for (let i = 0; i < text.length; i++) {
-    ctx.fillText(text[i], x, y);
-    x += widths[i];
-  }
-  ctx.textAlign = "center";
-}
-
-function roundRect(
-  ctx: CanvasRenderingContext2D,
-  x: number,
-  y: number,
-  w: number,
-  h: number,
-  radius: number,
-) {
-  ctx.beginPath();
-  ctx.moveTo(x + radius, y);
-  ctx.arcTo(x + w, y, x + w, y + h, radius);
-  ctx.arcTo(x + w, y + h, x, y + h, radius);
-  ctx.arcTo(x, y + h, x, y, radius);
-  ctx.arcTo(x, y, x + w, y, radius);
-  ctx.closePath();
-}
-
-function paintVignette(ctx: CanvasRenderingContext2D, w: number, h: number) {
-  const v = ctx.createRadialGradient(
-    w * 0.5,
-    h * 0.46,
-    Math.min(w, h) * 0.32,
-    w * 0.5,
-    h * 0.5,
-    Math.max(w, h) * 0.82,
-  );
-  v.addColorStop(0, "rgba(0,0,0,0)");
-  v.addColorStop(0.7, rgba("#02050D", 0.35));
-  v.addColorStop(1, rgba("#01030A", 0.85));
-  ctx.fillStyle = v;
-  ctx.fillRect(0, 0, w, h);
 }

@@ -451,9 +451,9 @@ function DossierState({
 export function IdeaPanel(props: IdeaPanelProps) {
   const { selected, hybrid, ideaById, ecosystem } = props;
   return (
-    <aside className="glass relative flex h-full w-[400px] shrink-0 flex-col overflow-hidden rounded-2xl shadow-panel">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal/30 to-transparent" />
-      <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/[0.02]" />
+    <aside className="relative flex h-full w-[400px] shrink-0 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/78 shadow-[0_24px_50px_-28px_rgba(6,95,110,0.58)] backdrop-blur-md">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/35 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/60" />
       <div className="flex h-full flex-col p-6">
         <AnimatePresence mode="wait">
           {selected ? (
