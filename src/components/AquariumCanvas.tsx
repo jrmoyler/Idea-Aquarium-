@@ -38,11 +38,21 @@ export function AquariumCanvas({
   const onHybridRef = useRef(onHybrid);
 
   const hoverIdRef = useRef<string | null>(null);
+  // Last known pointer position (canvas-local) so hover can be re-evaluated each
+  // frame — creatures swim, so a stationary cursor must still track what's under it.
+  const pointerRef = useRef<{ x: number; y: number; inside: boolean }>({
+    x: 0,
+    y: 0,
+    inside: false,
+  });
   const dragRef = useRef<{
     org: Organism;
     moved: boolean;
     downX: number;
     downY: number;
+    lastX: number;
+    lastY: number;
+    lastT: number;
   } | null>(null);
   const mergeCandidateRef = useRef<Organism | null>(null);
   const rendererRef = useRef<WebGLAquariumRenderer | null>(null);
@@ -117,14 +127,26 @@ export function AquariumCanvas({
 
     const onPointerDown = (e: PointerEvent) => {
       const { x, y } = getPos(e);
+      pointerRef.current = { x, y, inside: true };
       const hit = sim.hitTest(x, y);
       if (hit) {
-        dragRef.current = { org: hit, moved: false, downX: x, downY: y };
+        const now = performance.now();
+        dragRef.current = {
+          org: hit,
+          moved: false,
+          downX: x,
+          downY: y,
+          lastX: x,
+          lastY: y,
+          lastT: now,
+        };
+        hoverIdRef.current = hit.idea.id;
         try {
           canvas.setPointerCapture(e.pointerId);
         } catch {
           /* synthetic pointer */
         }
+        canvas.style.cursor = "grabbing";
       } else {
         onSelectRef.current(null);
       }
@@ -132,16 +154,31 @@ export function AquariumCanvas({
 
     const onPointerMove = (e: PointerEvent) => {
       const { x, y } = getPos(e);
+      pointerRef.current = { x, y, inside: true };
       const drag = dragRef.current;
       if (drag) {
         if (distance(x, y, drag.downX, drag.downY) > DRAG_THRESHOLD) {
           drag.moved = true;
         }
-        drag.org.x = clamp(x, 12, width - 12);
-        drag.org.y = clamp(y, 12, height - 12);
-        drag.org.vx = 0;
-        drag.org.vy = 0;
-        mergeCandidateRef.current = sim.nearestTo(drag.org, MERGE_RANGE);
+        const nx = clamp(x, 12, width - 12);
+        const ny = clamp(y, 12, height - 12);
+        // Track pointer velocity so releasing imparts a little fling — the
+        // creature glides on instead of dead-stopping where you let go.
+        const now = performance.now();
+        const dtMs = Math.max(1, now - drag.lastT);
+        drag.org.vx = clamp((nx - drag.lastX) / dtMs, -6, 6);
+        drag.org.vy = clamp((ny - drag.lastY) / dtMs, -6, 6);
+        drag.org.x = nx;
+        drag.org.y = ny;
+        drag.lastX = nx;
+        drag.lastY = ny;
+        drag.lastT = now;
+        // Only offer the nearest as a merge candidate when it's genuinely close.
+        const cand = sim.nearestTo(drag.org, MERGE_RANGE);
+        mergeCandidateRef.current =
+          cand && distance(drag.org.x, drag.org.y, cand.x, cand.y) <= MERGE_RANGE
+            ? cand
+            : null;
         canvas.style.cursor = "grabbing";
       } else {
         const hit = sim.hitTest(x, y);
@@ -159,10 +196,15 @@ export function AquariumCanvas({
           /* ignore */
         }
         if (!drag.moved) {
+          // A tap (no real movement) selects.
           onSelectRef.current(drag.org.idea.id);
         } else {
           const cand = mergeCandidateRef.current;
-          if (cand && distance(drag.org.x, drag.org.y, cand.x, cand.y) <= MERGE_RANGE) {
+          if (
+            cand &&
+            cand !== drag.org &&
+            distance(drag.org.x, drag.org.y, cand.x, cand.y) <= MERGE_RANGE
+          ) {
             onSelectRef.current(drag.org.idea.id);
             onHybridRef.current(drag.org.idea, cand.idea);
           }
@@ -170,12 +212,21 @@ export function AquariumCanvas({
       }
       mergeCandidateRef.current = null;
       dragRef.current = null;
-      canvas.style.cursor = "default";
+      // Re-evaluate hover/cursor at the release point.
+      const p = pointerRef.current;
+      const hit = p.inside ? sim.hitTest(p.x, p.y) : null;
+      hoverIdRef.current = hit ? hit.idea.id : null;
+      canvas.style.cursor = hit ? "pointer" : "default";
     };
 
     const onPointerLeave = () => {
-      hoverIdRef.current = null;
-      canvas.style.cursor = "default";
+      pointerRef.current.inside = false;
+      // Keep tracking hover while dragging (pointer capture continues the drag);
+      // only clear the passive hover highlight.
+      if (!dragRef.current) {
+        hoverIdRef.current = null;
+        canvas.style.cursor = "default";
+      }
     };
 
     canvas.addEventListener("pointerdown", onPointerDown);
@@ -194,6 +245,18 @@ export function AquariumCanvas({
       const dragged = dragRef.current?.org.idea.id ?? null;
       const mergeId = mergeCandidateRef.current?.idea.id ?? null;
       sim.step(dt, selectedRef.current, dragged, mergeId);
+
+      // Re-resolve hover every frame against the latest positions: creatures
+      // swim, so what's under a still cursor changes without any pointer event.
+      if (!dragRef.current && pointerRef.current.inside) {
+        const p = pointerRef.current;
+        const hit = sim.hitTest(p.x, p.y);
+        const id = hit ? hit.idea.id : null;
+        if (id !== hoverIdRef.current) {
+          hoverIdRef.current = id;
+          canvas.style.cursor = hit ? "pointer" : "default";
+        }
+      }
       renderer.render(sim.organisms, {
         now,
         selectedId: selectedRef.current,

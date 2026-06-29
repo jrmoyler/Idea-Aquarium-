@@ -1,4 +1,5 @@
 import { useCallback, useMemo, useState } from "react";
+import { MotionConfig } from "framer-motion";
 import { AquariumCanvas } from "./components/AquariumCanvas";
 import { Header } from "./components/Header";
 import { IdeaPanel } from "./components/IdeaPanel";
@@ -140,7 +141,8 @@ export default function App() {
   }, []);
 
   return (
-    <div className="flex h-screen w-screen flex-col overflow-hidden bg-gradient-to-br from-cyan-100 via-sky-100 to-emerald-100 text-slate-900">
+    <MotionConfig reducedMotion="user">
+    <div className="flex h-screen w-screen flex-col overflow-hidden bg-navy-950 text-slate-ink">
       <Header
         query={query}
         onQueryChange={setQuery}
@@ -157,12 +159,12 @@ export default function App() {
         }}
       />
 
-      <main className="relative flex flex-1 gap-5 overflow-hidden bg-gradient-to-br from-cyan-100/70 to-emerald-100/70 p-5">
+      <main className="relative flex flex-1 gap-4 overflow-hidden p-4 lg:gap-5 lg:p-5">
         {/* Aquarium viewport (hero) */}
-        <section className="relative flex-1 overflow-hidden rounded-2xl border border-white/60 bg-white/60 shadow-[0_24px_60px_-30px_rgba(22,104,116,0.55)] backdrop-blur-sm">
+        <section className="relative min-w-0 flex-1 overflow-hidden rounded-2xl border border-white/[0.06] bg-navy-950/60 shadow-[0_30px_80px_-40px_rgba(0,0,0,0.85)]">
           {/* Soft inner frame so the tank reads as a contained instrument. */}
-          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/70" />
-          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-cyan-400/60 to-transparent" />
+          <div className="pointer-events-none absolute inset-0 z-10 rounded-2xl ring-1 ring-inset ring-white/[0.05]" />
+          <div className="pointer-events-none absolute inset-x-0 top-0 z-10 h-px bg-gradient-to-r from-transparent via-teal/40 to-transparent" />
           <AquariumCanvas
             ideas={ideas}
             selectedId={selectedId}
@@ -173,12 +175,12 @@ export default function App() {
             onHybrid={handleHybrid}
           />
           {/* Corner readout */}
-          <div className="pointer-events-none absolute bottom-5 left-6 z-10 flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest2 text-cyan-900/70">
-            <span className="flex items-center gap-1.5">
-              <span className="h-1.5 w-1.5 rounded-full bg-cyan-500 shadow-[0_0_12px_rgba(6,182,212,0.7)] animate-pulse-soft" />
+          <div className="pointer-events-none absolute bottom-5 left-6 z-10 flex items-center gap-3 font-mono text-[10px] uppercase tracking-widest2 text-slate-mute">
+            <span className="flex items-center gap-1.5 text-teal/80">
+              <span className="h-1.5 w-1.5 rounded-full bg-teal shadow-[0_0_12px_rgba(34,211,197,0.8)] animate-pulse-soft" />
               Live Simulation
             </span>
-            <span className="text-cyan-900/30">/</span>
+            <span className="text-slate-line">/</span>
             <span className="capitalize">{mode} tempo</span>
           </div>
         </section>
@@ -195,6 +197,7 @@ export default function App() {
         />
       </main>
     </div>
+    </MotionConfig>
   );
 }
 

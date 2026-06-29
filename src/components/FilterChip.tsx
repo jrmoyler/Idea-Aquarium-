@@ -21,15 +21,15 @@ export function FilterChip({ label, active, count, onClick }: FilterChipProps) {
         "focus-ring group flex items-center gap-2 rounded-full px-3.5 py-1.5",
         "text-xs font-medium transition-colors duration-300",
         active
-          ? "border border-teal/45 bg-teal/10 text-teal shadow-[0_0_20px_-8px_rgba(0,217,181,0.7)]"
-          : "border border-slate-line/60 bg-navy-800/30 text-slate-mute hover:border-slate-ink/40 hover:bg-navy-800/60 hover:text-slate-700",
+          ? "border border-teal/45 bg-teal/10 text-teal-glow shadow-[0_0_20px_-8px_rgba(34,211,197,0.7)]"
+          : "border border-white/[0.07] bg-navy-800/40 text-slate-mute hover:border-white/[0.14] hover:bg-navy-800/70 hover:text-slate-ink",
       ].join(" ")}
     >
       <span
         className={[
           "h-1.5 w-1.5 rounded-full transition-all duration-300",
           active
-            ? "bg-teal shadow-[0_0_8px_0_rgba(0,217,181,0.9)] animate-pulse-soft"
+            ? "bg-teal shadow-[0_0_8px_0_rgba(34,211,197,0.9)] animate-pulse-soft"
             : "bg-slate-mute/70 group-hover:bg-slate-ink",
         ].join(" ")}
       />

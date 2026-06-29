@@ -4,29 +4,32 @@ export default {
   theme: {
     extend: {
       colors: {
-        // Core brand palette
+        // Deep "instrument tank" surfaces — cohesive with the dark canvas.
         navy: {
-          DEFAULT: "#eaf8ff",
-          950: "#d5efff",
-          900: "#eaf8ff",
-          850: "#dff5ff",
-          800: "#cceefe",
-          700: "#b8e7fd",
+          DEFAULT: "#0a1622",
+          950: "#060d16",
+          900: "#0a1622",
+          850: "#0e1c2b",
+          800: "#132433",
+          700: "#1b3146",
         },
+        // Active-intelligence accent.
         teal: {
-          DEFAULT: "#06B6D4",
-          glow: "#22D3EE",
-          dim: "#0E7490",
+          DEFAULT: "#22d3c5",
+          glow: "#5ff0e3",
+          dim: "#0f8c83",
         },
+        // Strategic weight (revenue / complexity).
         amber: {
-          DEFAULT: "#F59E0B",
-          glow: "#FACC15",
-          dim: "#B45309",
+          DEFAULT: "#f5c451",
+          glow: "#ffdd8a",
+          dim: "#b88a2a",
         },
+        // Text + hairlines on dark surfaces.
         slate: {
-          ink: "#334155",
-          mute: "#64748B",
-          line: "#c6def0",
+          ink: "#c4d4e4",
+          mute: "#7e93ad",
+          line: "#23384f",
         },
       },
       fontFamily: {

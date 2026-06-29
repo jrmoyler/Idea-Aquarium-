@@ -54,18 +54,18 @@ function TraitBar({
 }) {
   const fill =
     accent === "teal"
-      ? "linear-gradient(90deg, rgba(0,217,181,0.55), #00D9B5)"
-      : "linear-gradient(90deg, rgba(212,168,67,0.5), #D4A843)";
+      ? "linear-gradient(90deg, rgba(34,211,197,0.35), #22d3c5)"
+      : "linear-gradient(90deg, rgba(245,196,81,0.35), #f5c451)";
   const glow =
     accent === "teal"
-      ? "0 0 10px -2px rgba(0,217,181,0.8)"
-      : "0 0 10px -2px rgba(212,168,67,0.75)";
-  const textColor = accent === "teal" ? "text-teal" : "text-amber";
+      ? "0 0 10px -2px rgba(34,211,197,0.85)"
+      : "0 0 10px -2px rgba(245,196,81,0.8)";
+  const textColor = accent === "teal" ? "text-teal-glow" : "text-amber-glow";
 
   return (
-    <div className="flex flex-col gap-2">
+    <div className="flex flex-col gap-1.5">
       <div className="flex items-baseline justify-between">
-        <span className="text-[13px] font-medium text-slate-700">{label}</span>
+        <span className="text-[13px] font-medium text-slate-ink">{label}</span>
         <span className="flex items-baseline gap-2.5">
           <span className="text-[10px] uppercase tracking-wider text-slate-mute">
             {traitLabel(value)}
@@ -77,7 +77,7 @@ function TraitBar({
           </span>
         </span>
       </div>
-      <div className="h-[5px] overflow-hidden rounded-full bg-navy-700/50 ring-1 ring-inset ring-white/[0.03]">
+      <div className="h-[6px] overflow-hidden rounded-full bg-navy-700/70 ring-1 ring-inset ring-white/[0.04]">
         <motion.div
           className="h-full rounded-full"
           style={{ background: fill, boxShadow: glow }}
@@ -137,7 +137,7 @@ function WelcomeState({
     { label: "Avg Synergy", value: ecosystem.avgSynergy, accent: "text-teal" },
     { label: "Avg Momentum", value: ecosystem.avgMomentum, accent: "text-teal" },
     { label: "Build Queue", value: ecosystem.promoted, accent: "text-teal" },
-    { label: "Dormant", value: ecosystem.dormant, accent: "text-slate-700" },
+    { label: "Dormant", value: ecosystem.dormant, accent: "text-slate-ink" },
     { label: "Top Species", value: ecosystem.topSpecies, accent: "text-amber" },
   ];
   return (
@@ -153,7 +153,7 @@ function WelcomeState({
 
       <div className="flex-1">
         <SectionTitle>Intelligence Feed</SectionTitle>
-        <h2 className="font-grotesk text-[26px] font-semibold leading-[1.15] tracking-tight text-slate-900 text-balance">
+        <h2 className="font-grotesk text-[26px] font-semibold leading-[1.15] tracking-tight text-white/95 text-balance">
           The habitat is alive.
         </h2>
         <p className="mt-3.5 text-[13px] leading-relaxed text-slate-ink">
@@ -232,7 +232,7 @@ function HybridCard({
           type="button"
           onClick={onDismiss}
           whileTap={{ scale: 0.9 }}
-          className="focus-ring -mr-1 -mt-1 rounded-full p-1.5 text-slate-mute transition-colors hover:text-slate-800"
+          className="focus-ring -mr-1 -mt-1 rounded-full p-1.5 text-slate-mute transition-colors hover:text-slate-ink"
           aria-label="Dismiss hybrid"
         >
           <svg
@@ -317,7 +317,7 @@ function DossierState({
           </p>
           <StatusBadge status={idea.status} />
         </div>
-        <h2 className="mt-2.5 font-grotesk text-[26px] font-semibold leading-[1.1] tracking-tight text-slate-900">
+        <h2 className="mt-2.5 font-grotesk text-[26px] font-semibold leading-[1.1] tracking-tight text-white/95">
           {idea.name}
         </h2>
         <p className="mt-3.5 text-[13px] leading-relaxed text-slate-ink">
@@ -363,7 +363,7 @@ function DossierState({
               <div className="flex items-center gap-3">
                 <span className="h-7 w-7 rounded-full border border-teal/30 bg-teal/5" />
                 <div>
-                  <p className="font-grotesk text-sm font-medium text-slate-800">
+                  <p className="font-grotesk text-sm font-medium text-slate-ink">
                     {best.name}
                   </p>
                   <p className="text-[11px] text-slate-mute">{best.species}</p>
@@ -451,9 +451,9 @@ function DossierState({
 export function IdeaPanel(props: IdeaPanelProps) {
   const { selected, hybrid, ideaById, ecosystem } = props;
   return (
-    <aside className="relative flex h-full w-[400px] shrink-0 flex-col overflow-hidden rounded-2xl border border-white/70 bg-white/78 shadow-[0_24px_50px_-28px_rgba(6,95,110,0.58)] backdrop-blur-md">
-      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-cyan-400/35 to-transparent" />
-      <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/60" />
+    <aside className="relative flex h-full w-[340px] shrink-0 flex-col overflow-hidden rounded-2xl border border-white/[0.06] bg-navy-900/70 shadow-[0_30px_70px_-36px_rgba(0,0,0,0.85)] backdrop-blur-xl xl:w-[400px]">
+      <div className="pointer-events-none absolute inset-x-0 top-0 h-px bg-gradient-to-r from-transparent via-teal/35 to-transparent" />
+      <div className="pointer-events-none absolute inset-0 rounded-2xl ring-1 ring-inset ring-white/[0.05]" />
       <div className="flex h-full flex-col p-6">
         <AnimatePresence mode="wait">
           {selected ? (

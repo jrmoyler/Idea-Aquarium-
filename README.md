@@ -16,7 +16,8 @@ operating system.
 - **React + Vite + TypeScript**
 - **Tailwind CSS** for the dashboard shell
 - **Framer Motion** for interface animation
-- **HTML5 Canvas** for the live simulation layer (no game engine)
+- **three.js (WebGL)** for the live aquarium renderer — soft-bodied organisms,
+  bioluminescence, and depth are drawn on the GPU (not Canvas2D, no game engine)
 - Seeded local mock data only — no backend
 
 ## Getting started
@@ -36,8 +37,9 @@ npm run lint     # tsc --noEmit
 
 ## Experience
 
-- **Aquarium viewport (hero):** 16 idea organisms are rendered as soft-bodied,
-  bioluminescent deep-sea lifeforms (no geometric primitives). Each strategic
+- **Aquarium viewport (hero):** 18 idea organisms are rendered on a three.js
+  WebGL canvas as soft-bodied, bioluminescent deep-sea lifeforms (no geometric
+  primitives, no Canvas2D). Each strategic
   species maps to a biological body plan — **drifters** (pulsing jellyfish bells
   with trailing tendrils), **swarmers** (twitchy finned larvae), **floaters**
   (fragile glowing sacs), and **hunters** (tapered cephalopods with undulating
@@ -70,10 +72,10 @@ src/
   types.ts                 Domain types
   index.css                Tailwind layers + base styling
   data/
-    ideas.ts               16 seeded venture concepts
+    ideas.ts               18 seeded venture concepts
   lib/
+    webgl-aquarium.ts      three.js / WebGL renderer (membranes, tendrils, glow, depth)
     simulation.ts          Soft-body ecosystem (pulse propulsion, drag, schooling)
-    organisms.ts           Biological canvas renderer (membranes, tendrils, glow)
     organism-profile.ts    Deterministic creature "anatomy" grown from traits
     noise.ts               Procedural value noise for organic deformation
     color.ts               Palette + color math (hex/rgb, mix, lighten)
@@ -97,10 +99,11 @@ src/
 
 ## Extending
 
-- Add ideas in `src/data/ideas.ts` (they join the tank automatically).
+- Add ideas in `src/data/ideas.ts` (they join the tank automatically; wire each
+  one's `adjacentNodes` to existing ids to grow the synergy graph).
 - Tune behavior in `src/lib/simulation.ts` (pulse cadence, thrust, drag, schooling).
-- Reshape creatures in `src/lib/organism-profile.ts` (anatomy from traits) and
-  `src/lib/organisms.ts` (membranes, tendrils, internal bioluminescence); the
-  palette lives in `src/lib/color.ts`.
+- Reshape creatures in `src/lib/organism-profile.ts` (anatomy from traits) and the
+  three.js renderer in `src/lib/webgl-aquarium.ts` (membranes, tendrils, internal
+  bioluminescence); the palette lives in `src/lib/color.ts`.
 - A backend could later replace the seeded data and the `spawn` / `hybrid`
   generators without touching the simulation or UI.
